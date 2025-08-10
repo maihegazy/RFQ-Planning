@@ -7,13 +7,18 @@ class NextCloudService {
   constructor() {
     this.client = null;
     this.config = null;
-    this.initializeClient();
+    this.enabled = false; // Add flag to disable NextCloud
+    
+    // Comment out initialization for now
+    // this.initializeClient();
+    logger.info('NextCloud integration is disabled');
   }
 
   async initializeClient() {
+    // Commented out for now - uncomment when NextCloud is ready
+    /*
     try {
       // Get config from database (if exists)
-      // This would be stored in a settings table - for now use env vars
       this.config = {
         url: env.NEXTCLOUD_URL,
         username: env.NEXTCLOUD_USERNAME,
@@ -29,94 +34,51 @@ class NextCloudService {
       // Test connection
       await this.client.exists('/');
       logger.info('NextCloud connected successfully');
+      this.enabled = true;
     } catch (error) {
       logger.error('Failed to connect to NextCloud:', error);
+      this.enabled = false;
     }
+    */
   }
 
   async updateConfig(config) {
-    this.config = config;
-    this.client = createClient(config.url, {
-      username: config.username,
-      password: config.password,
-    });
-    
-    // Test connection
-    await this.client.exists('/');
-    
-    // Save to database for persistence
-    // await prisma.settings.upsert({ ... });
-    
-    return true;
+    // Disabled for now
+    logger.warn('NextCloud is currently disabled');
+    return false;
   }
 
   async uploadFile(rfqId, file, metadata) {
-    try {
-      const path = `${this.config.basePath}/${rfqId}/${metadata.type}`;
-      const filename = `${Date.now()}-${file.originalname}`;
-      const fullPath = `${path}/${filename}`;
-
-      // Create directory if it doesn't exist
-      await this.ensureDirectory(path);
-
-      // Upload file
-      await this.client.putFileContents(fullPath, file.buffer);
-
-      logger.info('File uploaded to NextCloud:', { path: fullPath });
-
-      return {
-        storagePath: fullPath,
-        filename: file.originalname,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-      };
-    } catch (error) {
-      logger.error('Failed to upload file to NextCloud:', error);
-      throw error;
-    }
+    // Return mock response when disabled
+    logger.warn('NextCloud upload skipped - feature disabled');
+    return {
+      storagePath: `local/${rfqId}/${metadata.type}/${Date.now()}-${file.originalname}`,
+      filename: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+    };
   }
 
   async downloadFile(storagePath) {
-    try {
-      const content = await this.client.getFileContents(storagePath);
-      return content;
-    } catch (error) {
-      logger.error('Failed to download file from NextCloud:', error);
-      throw error;
-    }
+    // Return empty buffer when disabled
+    logger.warn('NextCloud download skipped - feature disabled');
+    return Buffer.from('');
   }
 
   async deleteFile(storagePath) {
-    try {
-      await this.client.deleteFile(storagePath);
-      logger.info('File deleted from NextCloud:', { path: storagePath });
-    } catch (error) {
-      logger.error('Failed to delete file from NextCloud:', error);
-      throw error;
-    }
+    // Do nothing when disabled
+    logger.warn('NextCloud delete skipped - feature disabled');
   }
 
   async ensureDirectory(path) {
-    const parts = path.split('/').filter(Boolean);
-    let currentPath = '';
-
-    for (const part of parts) {
-      currentPath += `/${part}`;
-      const exists = await this.client.exists(currentPath);
-      if (!exists) {
-        await this.client.createDirectory(currentPath);
-      }
-    }
+    // Do nothing when disabled
+    logger.warn('NextCloud directory creation skipped - feature disabled');
   }
 
   async listFiles(path) {
-    try {
-      const contents = await this.client.getDirectoryContents(path);
-      return contents;
-    } catch (error) {
-      logger.error('Failed to list files from NextCloud:', error);
-      throw error;
-    }
+    // Return empty array when disabled
+    logger.warn('NextCloud list files skipped - feature disabled');
+    return [];
   }
 }
 

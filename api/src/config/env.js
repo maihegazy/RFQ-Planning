@@ -15,9 +15,10 @@ const envSchema = z.object({
   SMTP_SECURE: z.string().transform(val => val === 'true'),
   SMTP_USER: z.string(),
   SMTP_PASS: z.string(),
-  NEXTCLOUD_URL: z.string(),
-  NEXTCLOUD_USERNAME: z.string(),
-  NEXTCLOUD_PASSWORD: z.string(),
+  // Make NextCloud optional
+  NEXTCLOUD_URL: z.string().optional().default('https://your-nextcloud-instance.com'),
+  NEXTCLOUD_USERNAME: z.string().optional().default('dummy'),
+  NEXTCLOUD_PASSWORD: z.string().optional().default('dummy'),
   NEXTCLOUD_BASE_PATH: z.string().default('/RFQ-System'),
   LOG_LEVEL: z.string().default('info'),
   LOG_DIR: z.string().default('./logs'),
