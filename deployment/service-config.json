@@ -1,0 +1,24 @@
+{
+  "name": "RFQ-API",
+  "displayName": "RFQ Management API Service",
+  "description": "Backend API service for RFQ Management System",
+  "script": "C:\\RFQSystem\\api\\src\\index.js",
+  "nodeOptions": [
+    "--max-old-space-size=2048",
+    "--trace-warnings"
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": "3000"
+  },
+  "cwd": "C:\\RFQSystem\\api",
+  "wait": 2,
+  "grow": 0.5,
+  "maxRestarts": 3,
+  "maxRetries": 5,
+  "abortOnError": false,
+  "logpath": "C:\\RFQSystem\\logs",
+  "outFile": "C:\\RFQSystem\\logs\\api-out.log",
+  "errFile": "C:\\RFQSystem\\logs\\api-err.log",
+  "timestamp": true
+}

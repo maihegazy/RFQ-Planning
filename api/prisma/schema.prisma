@@ -1,0 +1,367 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  DELIVERY_MANAGER
+  GENERAL_MANAGER
+  ENGINEERING_MANAGER
+  PROJECT_LEADER
+  TEAM_LEADER
+  TECHNICAL_LEADER
+  TECHNICAL_REVIEWER
+}
+
+enum RfqStatus {
+  NEW
+  IN_ANALYSIS
+  IN_PLANNING
+  SUBMITTED
+  AWARDED
+  NOT_AWARDED
+}
+
+enum ApprovalPolicy {
+  PARALLEL_TECH_BUDGET_OVERALL
+  SIMPLE
+}
+
+enum ScenarioType {
+  TM
+  FIXED
+}
+
+enum ApprovalTaskType {
+  TECH
+  BUDGET
+  OVERALL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CostType {
+  PERCENTAGE
+  ABSOLUTE
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  password      String?
+  role          UserRole
+  active        Boolean        @default(true)
+  inviteToken   String?        @unique
+  inviteExpiry  DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  createdRfqs   Rfq[]          @relation("RfqCreator")
+  rfqMembers    RfqMember[]
+  comments      Comment[]
+  auditLogs     AuditLog[]
+  approvalTasks ApprovalTask[] @relation("ApprovalAssignee")
+  decisions     ApprovalTask[] @relation("DecisionMaker")
+}
+
+model Rfq {
+  id          String         @id @default(cuid())
+  name        String
+  customer    String
+  description String?
+  startYear   Int
+  endYear     Int
+  startMonth  Int            @default(1)
+  endMonth    Int            @default(12)
+  policy      ApprovalPolicy @default(PARALLEL_TECH_BUDGET_OVERALL)
+  status      RfqStatus      @default(NEW)
+  currency    String         @default("EUR")
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  createdBy        User               @relation("RfqCreator", fields: [createdById], references: [id])
+  members          RfqMember[]
+  features         Feature[]
+  profilePlans     ProfilePlan[]
+  scenarios        Scenario[]
+  decisionPackages DecisionPackage[]
+  hwItems          HwItem[]
+  comments         Comment[]
+  attachments      Attachment[]
+  auditLogs        AuditLog[]
+
+  @@index([status])
+  @@index([customer])
+}
+
+model RfqMember {
+  id               String   @id @default(cuid())
+  rfqId            String
+  userId           String
+  isTechReviewer   Boolean  @default(false)
+  isOwner          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  rfq  Rfq  @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([rfqId, userId])
+  @@index([rfqId])
+  @@index([userId])
+}
+
+model Feature {
+  id          String   @id @default(cuid())
+  rfqId       String
+  name        String
+  description String?
+  targetMonth Int?
+  targetYear  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rfq          Rfq           @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  profilePlans ProfilePlan[]
+  comments     Comment[]
+  attachments  Attachment[]
+
+  @@index([rfqId])
+}
+
+model ProfilePlan {
+  id         String   @id @default(cuid())
+  rfqId      String
+  featureId  String
+  location   String   // BCC, HCC, MCC
+  role       String
+  level      String
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  rfq                Rfq                  @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  feature            Feature              @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  monthlyAllocations MonthlyAllocation[]
+
+  @@index([rfqId])
+  @@index([featureId])
+}
+
+model MonthlyAllocation {
+  id            String  @id @default(cuid())
+  profilePlanId String
+  year          Int
+  month         Int
+  fte           Decimal @db.Decimal(3, 1)
+
+  profilePlan ProfilePlan @relation(fields: [profilePlanId], references: [id], onDelete: Cascade)
+
+  @@unique([profilePlanId, year, month])
+  @@index([profilePlanId])
+  @@index([year, month])
+}
+
+model RateCost {
+  id            String   @id @default(cuid())
+  costCenter    String   // BCC, HCC, MCC
+  effectiveFrom DateTime
+  effectiveTo   DateTime
+  costPerHour   Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([costCenter, effectiveFrom, effectiveTo])
+}
+
+model RateSell {
+  id            String   @id @default(cuid())
+  location      String
+  level         String
+  useCase       String
+  effectiveFrom DateTime
+  effectiveTo   DateTime
+  sellPerHour   Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([location, level, useCase, effectiveFrom, effectiveTo])
+}
+
+model Scenario {
+  id                   String       @id @default(cuid())
+  rfqId                String
+  name                 String
+  type                 ScenarioType
+  useCase              String?
+  riskFactor           Decimal?     @db.Decimal(3, 2)
+  hwOverhead           Decimal?     @db.Decimal(10, 2)
+  spSmall              Int?
+  spMedium             Int?
+  spLarge              Int?
+  quotaSmall           Int?
+  quotaMedium          Int?
+  quotaLarge           Int?
+  spToHoursMultiplier  Decimal?     @db.Decimal(5, 2)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  rfq                      Rfq                        @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  additionalCosts          AdditionalCost[]
+  decisionPackageScenarios DecisionPackageScenario[]
+  comments                 Comment[]
+  attachments              Attachment[]
+
+  @@index([rfqId])
+}
+
+model AdditionalCost {
+  id         String   @id @default(cuid())
+  scenarioId String
+  name       String
+  type       CostType
+  value      Decimal  @db.Decimal(10, 2)
+  notes      String?
+
+  scenario Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+}
+
+model HwItem {
+  id       String   @id @default(cuid())
+  rfqId    String
+  item     String
+  quantity Int
+  unitCost Decimal  @db.Decimal(10, 2)
+  vendor   String?
+  leadTime Int?     // days
+  notes    String?
+
+  rfq Rfq @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
+}
+
+model DecisionPackage {
+  id        String   @id @default(cuid())
+  rfqId     String
+  version   Int
+  name      String
+  status    String   @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rfq              Rfq                        @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  scenarios        DecisionPackageScenario[]
+  approvalTasks    ApprovalTask[]
+  comments         Comment[]
+  attachments      Attachment[]
+
+  @@unique([rfqId, version])
+  @@index([rfqId])
+}
+
+model DecisionPackageScenario {
+  id                String    @id @default(cuid())
+  decisionPackageId String
+  scenarioId        String
+  lockedAt          DateTime?
+  snapshotData      Json?     // Store full scenario snapshot
+
+  decisionPackage DecisionPackage @relation(fields: [decisionPackageId], references: [id], onDelete: Cascade)
+  scenario        Scenario        @relation(fields: [scenarioId], references: [id])
+
+  @@unique([decisionPackageId, scenarioId])
+  @@index([decisionPackageId])
+}
+
+model ApprovalTask {
+  id               String           @id @default(cuid())
+  decisionPackageId String
+  type             ApprovalTaskType
+  assignedToId     String?
+  assignedToRole   UserRole?
+  status           ApprovalStatus   @default(PENDING)
+  dueDate          DateTime?
+  decidedById      String?
+  decidedAt        DateTime?
+  decisionComment  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  decisionPackage DecisionPackage @relation(fields: [decisionPackageId], references: [id], onDelete: Cascade)
+  assignedTo      User?           @relation("ApprovalAssignee", fields: [assignedToId], references: [id])
+  decidedBy       User?           @relation("DecisionMaker", fields: [decidedById], references: [id])
+
+  @@index([decisionPackageId])
+  @@index([status])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  parentType String   // RFQ, FEATURE, SCENARIO, DECISION_PACKAGE
+  parentId   String
+  userId     String
+  body       String
+  mentions   String[] // Array of user IDs
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id])
+  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentType, parentId])
+  @@index([userId])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  parentType String   // RFQ, FEATURE, SCENARIO, DECISION_PACKAGE
+  parentId   String
+  filename   String
+  version    Int      @default(1)
+  fileSize   Int
+  mimeType   String
+  storagePath String  // NextCloud path
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentType, parentId])
+}
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  rfqId    String?
+  userId   String
+  entity   String
+  entityId String
+  action   String
+  changes  Json?
+  at       DateTime @default(now())
+
+  rfq  Rfq?  @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([rfqId])
+  @@index([userId])
+  @@index([entity, entityId])
+}

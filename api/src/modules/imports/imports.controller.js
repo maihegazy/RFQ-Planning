@@ -1,0 +1,56 @@
+const importService = require('./import.service');
+
+const importsController = {
+  async importResourcePlan(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file provided' });
+      }
+
+      const result = await importService.importResourcePlan(req.params.rfqId, req.file.buffer);
+      
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async importRates(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file provided' });
+      }
+
+      const result = await importService.importRates(req.file.buffer, req.query.type || 'both');
+      
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async downloadTemplate(req, res, next) {
+    try {
+      const buffer = await importService.generateTemplates();
+      
+      res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="rfq-import-templates.xlsx"',
+      });
+      
+      res.send(buffer);
+    } catch (error) {
+      next(error);
+    }
+  },
+};
+
+module.exports = importsController;
