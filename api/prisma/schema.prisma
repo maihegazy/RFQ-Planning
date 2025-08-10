@@ -143,6 +143,8 @@ model ProfilePlan {
   id         String   @id @default(cuid())
   rfqId      String
   featureId  String
+  // Optional link to master Profile
+  profileId  String?   // NEW
   location   String   // BCC, HCC, MCC
   role       String
   level      String
@@ -156,6 +158,22 @@ model ProfilePlan {
 
   @@index([rfqId])
   @@index([featureId])
+}
+/// Library of resource profiles used in RFQ planning
+model Profile {
+  id         String   @id @default(cuid())
+  role       String   // e.g., Developer, Tester, PL, TL
+  level      String   // e.g., Principal, Senior, Standard, Junior
+  location   String   // e.g., HCC, MCC, BCC
+  costCenter String   // tie explicitly (often same as location)
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([role, level, location])
+  @@index([location, level])
+  @@index([costCenter])
 }
 
 model MonthlyAllocation {
@@ -319,10 +337,10 @@ model Comment {
   updatedAt  DateTime @updatedAt
 
   user        User         @relation(fields: [userId], references: [id])
-  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Comment_rfq_parentId_fkey")
+  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Comment_feature_parentId_fkey")
+  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Comment_scenario_parentId_fkey")
+  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Comment_decisionPkg_parentId_fkey")
 
   @@index([parentType, parentId])
   @@index([userId])
@@ -340,10 +358,10 @@ model Attachment {
   uploadedBy String
   createdAt  DateTime @default(now())
 
-  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  rfq         Rfq?         @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Attachment_rfq_parentId_fkey")
+  feature     Feature?     @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Attachment_feature_parentId_fkey")
+  scenario    Scenario?    @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Attachment_scenario_parentId_fkey")
+  decisionPkg DecisionPackage? @relation(fields: [parentId], references: [id], onDelete: Cascade, map: "Attachment_decisionPkg_parentId_fkey")
 
   @@index([parentType, parentId])
 }
@@ -364,4 +382,39 @@ model AuditLog {
   @@index([rfqId])
   @@index([userId])
   @@index([entity, entityId])
+}
+/// Cost rate per cost center (e.g., BCC/HCC/MCC)
+model CostRate {
+  id           String   @id @default(cuid())
+  costCenter   String   // e.g., BCC, HCC, MCC
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  costPerHour   Decimal  @db.Decimal(10, 2)
+  notes         String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  /// Helpful indexes for lookups & overlap checks
+  @@index([costCenter, effectiveFrom])
+  @@index([costCenter, effectiveTo])
+}
+
+/// Selling rate per (location + level + useCase)
+model SellRate {
+  id            String   @id @default(cuid())
+  location      String   // e.g., BCC, HCC, MCC (or site names if you prefer)
+  level         String   // e.g., Principal, Senior, Standard, Junior
+  useCase       String   // e.g., UC1, UC2, UC3 (Best Benefit / Best Price / Compromise)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  sellPerHour   Decimal  @db.Decimal(10, 2)
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  /// Useful indexes for queries & validations
+  @@index([location, level, useCase, effectiveFrom])
+  @@index([location, level, useCase, effectiveTo])
 }

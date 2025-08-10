@@ -24,6 +24,7 @@ const commentsRouter = require('./modules/comments/comments.router');
 const attachmentsRouter = require('./modules/attachments/attachments.router');
 const importsRouter = require('./modules/imports/imports.router');
 const exportsRouter = require('./modules/exports/exports.router');
+const profilePlansRouter = require('./modules/profile-plans/profile-plans.router');
 
 const app = express();
 
@@ -78,7 +79,7 @@ app.use('/api/comments', commentsRouter);
 app.use('/api/attachments', attachmentsRouter);
 app.use('/api/imports', importsRouter);
 app.use('/api/exports', exportsRouter);
-
+app.use('/api/profile-plans', profilePlansRouter);
 // Audit middleware (after routes)
 app.use(auditMiddleware);
 
