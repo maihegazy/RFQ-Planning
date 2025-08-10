@@ -23,13 +23,15 @@ import {
   CardActions,
   IconButton,
   Alert,
+} from '@mui/material';
+import {
   Timeline,
   TimelineItem,
   TimelineSeparator,
   TimelineDot,
   TimelineConnector,
   TimelineContent,
-} from '@mui/material';
+} from '@mui/lab';
 import {
   Add as AddIcon,
   Send as SendIcon,

@@ -16,7 +16,7 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 
 function App() {
-  const { user, loading } from useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
