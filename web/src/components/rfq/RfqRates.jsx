@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// web/src/components/rfq/RfqRates.jsx
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'react-query';
 import {
   Box,
@@ -43,8 +44,8 @@ function RfqRates({ rfqId }) {
   const [sellRateDialog, setSellRateDialog] = useState({ open: false, rate: null });
   const [importDialog, setImportDialog] = useState(false);
 
-  // Fetch cost rates
-  const { data: costRates, refetch: refetchCostRates } = useQuery(
+  // Fetch cost rates and extract items from paginated response
+  const { data: costRatesResponse, refetch: refetchCostRates } = useQuery(
     'costRates',
     async () => {
       const response = await api.get('/rates/cost');
@@ -52,8 +53,19 @@ function RfqRates({ rfqId }) {
     }
   );
 
-  // Fetch sell rates
-  const { data: sellRates, refetch: refetchSellRates } = useQuery(
+  const costRates = useMemo(() => {
+    if (!costRatesResponse) return [];
+    if (costRatesResponse.items && Array.isArray(costRatesResponse.items)) {
+      return costRatesResponse.items;
+    }
+    if (Array.isArray(costRatesResponse)) {
+      return costRatesResponse;
+    }
+    return [];
+  }, [costRatesResponse]);
+
+  // Fetch sell rates and extract items from paginated response
+  const { data: sellRatesResponse, refetch: refetchSellRates } = useQuery(
     'sellRates',
     async () => {
       const response = await api.get('/rates/sell');
@@ -61,14 +73,19 @@ function RfqRates({ rfqId }) {
     }
   );
 
-  // Fetch use cases
-  const { data: useCases } = useQuery(
-    'useCases',
-    async () => {
-      const response = await api.get('/rates/use-cases');
-      return response.data;
+  const sellRates = useMemo(() => {
+    if (!sellRatesResponse) return [];
+    if (sellRatesResponse.items && Array.isArray(sellRatesResponse.items)) {
+      return sellRatesResponse.items;
     }
-  );
+    if (Array.isArray(sellRatesResponse)) {
+      return sellRatesResponse;
+    }
+    return [];
+  }, [sellRatesResponse]);
+
+  // Define use cases locally instead of fetching from API
+  const useCases = ['UC1', 'UC2', 'UC3'];
 
   const createCostRateMutation = useMutation(
     (data) => api.post('/rates/cost', data),
@@ -243,30 +260,40 @@ function RfqRates({ rfqId }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {costRates?.map((rate) => (
-                  <TableRow key={rate.id}>
-                    <TableCell>
-                      <Chip label={rate.costCenter} />
-                    </TableCell>
-                    <TableCell>{new Date(rate.effectiveFrom).toLocaleDateString()}</TableCell>
-                    <TableCell>{new Date(rate.effectiveTo).toLocaleDateString()}</TableCell>
-                    <TableCell align="right">€{parseFloat(rate.costPerHour).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => setCostRateDialog({ open: true, rate })}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => deleteCostRateMutation.mutate(rate.id)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                {costRates.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography variant="body2" color="textSecondary">
+                        No cost rates defined yet
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  costRates.map((rate) => (
+                    <TableRow key={rate.id}>
+                      <TableCell>
+                        <Chip label={rate.costCenter} />
+                      </TableCell>
+                      <TableCell>{new Date(rate.effectiveFrom).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(rate.effectiveTo).toLocaleDateString()}</TableCell>
+                      <TableCell align="right">€{parseFloat(rate.costPerHour).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => setCostRateDialog({ open: true, rate })}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => deleteCostRateMutation.mutate(rate.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -300,34 +327,44 @@ function RfqRates({ rfqId }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sellRates?.map((rate) => (
-                  <TableRow key={rate.id}>
-                    <TableCell>
-                      <Chip label={rate.location} size="small" />
-                    </TableCell>
-                    <TableCell>{rate.level}</TableCell>
-                    <TableCell>
-                      <Chip label={rate.useCase} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell>{new Date(rate.effectiveFrom).toLocaleDateString()}</TableCell>
-                    <TableCell>{new Date(rate.effectiveTo).toLocaleDateString()}</TableCell>
-                    <TableCell align="right">€{parseFloat(rate.sellPerHour).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => setSellRateDialog({ open: true, rate })}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => deleteSellRateMutation.mutate(rate.id)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                {sellRates.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      <Typography variant="body2" color="textSecondary">
+                        No sell rates defined yet
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  sellRates.map((rate) => (
+                    <TableRow key={rate.id}>
+                      <TableCell>
+                        <Chip label={rate.location} size="small" />
+                      </TableCell>
+                      <TableCell>{rate.level}</TableCell>
+                      <TableCell>
+                        <Chip label={rate.useCase} size="small" variant="outlined" />
+                      </TableCell>
+                      <TableCell>{new Date(rate.effectiveFrom).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(rate.effectiveTo).toLocaleDateString()}</TableCell>
+                      <TableCell align="right">€{parseFloat(rate.sellPerHour).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => setSellRateDialog({ open: true, rate })}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => deleteSellRateMutation.mutate(rate.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -344,7 +381,7 @@ function RfqRates({ rfqId }) {
             Use cases allow different pricing strategies for the same resources.
           </Typography>
           <Grid container spacing={2} sx={{ mt: 2 }}>
-            {useCases?.map((uc) => (
+            {useCases.map((uc) => (
               <Grid item xs={12} sm={6} md={4} key={uc}>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="h6">{uc}</Typography>
@@ -352,10 +389,9 @@ function RfqRates({ rfqId }) {
                     {uc === 'UC1' && 'Best Benefit - Premium pricing'}
                     {uc === 'UC2' && 'Compromise - Balanced pricing'}
                     {uc === 'UC3' && 'Best Price - Competitive pricing'}
-                    {!['UC1', 'UC2', 'UC3'].includes(uc) && 'Custom use case'}
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 1 }}>
-                    {sellRates?.filter(r => r.useCase === uc).length || 0} rates defined
+                    {sellRates.filter(r => r.useCase === uc).length} rates defined
                   </Typography>
                 </Paper>
               </Grid>
@@ -364,6 +400,7 @@ function RfqRates({ rfqId }) {
         </Paper>
       )}
 
+      {/* Rest of the component (dialogs) remain the same... */}
       {/* Cost Rate Dialog */}
       <Dialog open={costRateDialog.open} onClose={() => setCostRateDialog({ open: false, rate: null })} maxWidth="sm" fullWidth>
         <form
@@ -503,13 +540,17 @@ function RfqRates({ rfqId }) {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
+                  select
                   name="useCase"
                   label="Use Case"
                   margin="normal"
                   required
                   defaultValue={sellRateDialog.rate?.useCase || ''}
-                  placeholder="e.g., UC1, UC2, UC3"
-                />
+                >
+                  {useCases.map(uc => (
+                    <MenuItem key={uc} value={uc}>{uc}</MenuItem>
+                  ))}
+                </TextField>
               </Grid>
               <Grid item xs={6}>
                 <TextField

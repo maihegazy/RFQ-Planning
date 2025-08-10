@@ -40,26 +40,56 @@ function RfqResourcePlan({ rfqId }) {
   const [allocationDialog, setAllocationDialog] = useState({ open: false, profile: null });
   const [importDialog, setImportDialog] = useState(false);
 
-  const { data: features } = useQuery(['features', rfqId], async () => {
+  // Fix: Query features and extract items from paginated response
+  const { data: featuresResponse } = useQuery(['features', rfqId], async () => {
     const response = await api.get(`/features/rfq/${rfqId}`);
     return response.data;
   });
+  
+  // Extract the items array, handling both paginated and non-paginated responses
+  const features = useMemo(() => {
+    if (!featuresResponse) return [];
+    // Check if it's a paginated response
+    if (featuresResponse.items && Array.isArray(featuresResponse.items)) {
+      return featuresResponse.items;
+    }
+    // If it's already an array, use it directly
+    if (Array.isArray(featuresResponse)) {
+      return featuresResponse;
+    }
+    return [];
+  }, [featuresResponse]);
 
-  const { data: profiles, refetch } = useQuery(['profiles', rfqId], async () => {
-    const response = await api.get(`/profiles/rfq/${rfqId}`);
+  // Fix: Query profile plans using the correct endpoint
+  const { data: profilePlansResponse, refetch } = useQuery(['profile-plans', rfqId], async () => {
+    const response = await api.get(`/profile-plans/rfq/${rfqId}`);
     return response.data;
   });
 
+  // Extract the items array for profile plans
+  const profilePlans = useMemo(() => {
+    if (!profilePlansResponse) return [];
+    // Check if it's a paginated response
+    if (profilePlansResponse.items && Array.isArray(profilePlansResponse.items)) {
+      return profilePlansResponse.items;
+    }
+    // If it's already an array, use it directly
+    if (Array.isArray(profilePlansResponse)) {
+      return profilePlansResponse;
+    }
+    return [];
+  }, [profilePlansResponse]);
+
   const createProfileMutation = useMutation(
-    (data) => api.post('/profiles', data),
+    (data) => api.post('/profile-plans', data),
     {
       onSuccess: () => {
-        enqueueSnackbar('Profile created successfully', { variant: 'success' });
+        enqueueSnackbar('Profile plan created successfully', { variant: 'success' });
         setProfileDialog({ open: false, profile: null });
         refetch();
       },
       onError: (error) => {
-        enqueueSnackbar(error.response?.data?.error || 'Failed to create profile', { variant: 'error' });
+        enqueueSnackbar(error.response?.data?.error || 'Failed to create profile plan', { variant: 'error' });
       },
     }
   );
@@ -79,14 +109,14 @@ function RfqResourcePlan({ rfqId }) {
   );
 
   const deleteProfileMutation = useMutation(
-    (id) => api.delete(`/profiles/${id}`),
+    (id) => api.delete(`/profile-plans/${id}`),
     {
       onSuccess: () => {
-        enqueueSnackbar('Profile deleted successfully', { variant: 'success' });
+        enqueueSnackbar('Profile plan deleted successfully', { variant: 'success' });
         refetch();
       },
       onError: (error) => {
-        enqueueSnackbar(error.response?.data?.error || 'Failed to delete profile', { variant: 'error' });
+        enqueueSnackbar(error.response?.data?.error || 'Failed to delete profile plan', { variant: 'error' });
       },
     }
   );
@@ -131,17 +161,17 @@ function RfqResourcePlan({ rfqId }) {
     setImportDialog(false);
   };
 
-  // Group profiles by feature
-  const profilesByFeature = useMemo(() => {
-    if (!profiles) return {};
-    return profiles.reduce((acc, profile) => {
+  // Group profile plans by feature
+  const profilePlansByFeature = useMemo(() => {
+    if (!profilePlans || profilePlans.length === 0) return {};
+    return profilePlans.reduce((acc, profile) => {
       if (!acc[profile.featureId]) {
         acc[profile.featureId] = [];
       }
       acc[profile.featureId].push(profile);
       return acc;
     }, {});
-  }, [profiles]);
+  }, [profilePlans]);
 
   return (
     <Box>
@@ -175,72 +205,89 @@ function RfqResourcePlan({ rfqId }) {
 
       {activeTab === 0 && (
         <Box>
-          {features?.map((feature) => (
-            <Paper key={feature.id} sx={{ mb: 2, p: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                {feature.name}
+          {!features || features.length === 0 ? (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography color="textSecondary">
+                No features added yet. Add features first to create resource plans.
               </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Level</TableCell>
-                      <TableCell>Location</TableCell>
-                      <TableCell>Jan</TableCell>
-                      <TableCell>Feb</TableCell>
-                      <TableCell>Mar</TableCell>
-                      <TableCell>Apr</TableCell>
-                      <TableCell>May</TableCell>
-                      <TableCell>Jun</TableCell>
-                      <TableCell>Jul</TableCell>
-                      <TableCell>Aug</TableCell>
-                      <TableCell>Sep</TableCell>
-                      <TableCell>Oct</TableCell>
-                      <TableCell>Nov</TableCell>
-                      <TableCell>Dec</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {profilesByFeature[feature.id]?.map((profile) => (
-                      <TableRow key={profile.id}>
-                        <TableCell>{profile.role}</TableCell>
-                        <TableCell>{profile.level}</TableCell>
-                        <TableCell>
-                          <Chip label={profile.location} size="small" />
-                        </TableCell>
-                        {[...Array(12)].map((_, month) => {
-                          const allocation = profile.monthlyAllocations?.find(
-                            a => a.month === month + 1
-                          );
-                          return (
-                            <TableCell key={month}>
-                              {allocation ? parseFloat(allocation.fte).toFixed(1) : '-'}
-                            </TableCell>
-                          );
-                        })}
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => setAllocationDialog({ open: true, profile })}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => deleteProfileMutation.mutate(profile.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
             </Paper>
-          ))}
+          ) : (
+            features.map((feature) => (
+              <Paper key={feature.id} sx={{ mb: 2, p: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  {feature.name}
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Role</TableCell>
+                        <TableCell>Level</TableCell>
+                        <TableCell>Location</TableCell>
+                        <TableCell>Jan</TableCell>
+                        <TableCell>Feb</TableCell>
+                        <TableCell>Mar</TableCell>
+                        <TableCell>Apr</TableCell>
+                        <TableCell>May</TableCell>
+                        <TableCell>Jun</TableCell>
+                        <TableCell>Jul</TableCell>
+                        <TableCell>Aug</TableCell>
+                        <TableCell>Sep</TableCell>
+                        <TableCell>Oct</TableCell>
+                        <TableCell>Nov</TableCell>
+                        <TableCell>Dec</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {profilePlansByFeature[feature.id]?.map((profile) => (
+                        <TableRow key={profile.id}>
+                          <TableCell>{profile.role}</TableCell>
+                          <TableCell>{profile.level}</TableCell>
+                          <TableCell>
+                            <Chip label={profile.location} size="small" />
+                          </TableCell>
+                          {[...Array(12)].map((_, month) => {
+                            const allocation = profile.monthlyAllocations?.find(
+                              a => a.month === month + 1
+                            );
+                            return (
+                              <TableCell key={month}>
+                                {allocation ? parseFloat(allocation.fte).toFixed(1) : '-'}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              onClick={() => setAllocationDialog({ open: true, profile })}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => deleteProfileMutation.mutate(profile.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {(!profilePlansByFeature[feature.id] || profilePlansByFeature[feature.id].length === 0) && (
+                        <TableRow>
+                          <TableCell colSpan={17} align="center">
+                            <Typography variant="body2" color="textSecondary">
+                              No resource profiles for this feature
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            ))
+          )}
         </Box>
       )}
 
@@ -260,17 +307,17 @@ function RfqResourcePlan({ rfqId }) {
               <Typography variant="subtitle2" color="textSecondary">
                 Total Profiles
               </Typography>
-              <Typography variant="h4">{profiles?.length || 0}</Typography>
+              <Typography variant="h4">{profilePlans?.length || 0}</Typography>
             </Grid>
             <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" color="textSecondary">
                 Total FTE (Average)
               </Typography>
               <Typography variant="h4">
-                {profiles?.reduce((sum, p) => {
-                  const avgFte = p.monthlyAllocations?.reduce((s, a) => s + parseFloat(a.fte), 0) / 
+                {profilePlans?.reduce((sum, p) => {
+                  const avgFte = p.monthlyAllocations?.reduce((s, a) => s + parseFloat(a.fte || 0), 0) / 
                                 (p.monthlyAllocations?.length || 1);
-                  return sum + avgFte;
+                  return sum + (avgFte || 0);
                 }, 0).toFixed(1) || 0}
               </Typography>
             </Grid>
@@ -279,9 +326,9 @@ function RfqResourcePlan({ rfqId }) {
                 Cost Centers
               </Typography>
               <Box display="flex" gap={1} mt={1}>
-                <Chip label={`BCC: ${profiles?.filter(p => p.location === 'BCC').length || 0}`} />
-                <Chip label={`HCC: ${profiles?.filter(p => p.location === 'HCC').length || 0}`} />
-                <Chip label={`MCC: ${profiles?.filter(p => p.location === 'MCC').length || 0}`} />
+                <Chip label={`BCC: ${profilePlans?.filter(p => p.location === 'BCC').length || 0}`} />
+                <Chip label={`HCC: ${profilePlans?.filter(p => p.location === 'HCC').length || 0}`} />
+                <Chip label={`MCC: ${profilePlans?.filter(p => p.location === 'MCC').length || 0}`} />
               </Box>
             </Grid>
           </Grid>
@@ -362,7 +409,7 @@ function RfqResourcePlan({ rfqId }) {
         </form>
       </Dialog>
 
-      {/* Import Dialog */}
+      {/* Import Dialog - Rest of the component remains the same */}
       <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Import Resource Plan</DialogTitle>
         <DialogContent>

@@ -1,3 +1,4 @@
+// web/src/components/rfq/RfqFeatures.jsx
 import React, { useState } from 'react';
 import { useQuery, useMutation } from 'react-query';
 import {
@@ -31,13 +32,16 @@ function RfqFeatures({ rfqId }) {
   const { enqueueSnackbar } = useSnackbar();
   const [dialog, setDialog] = useState({ open: false, feature: null });
 
-  const { data: features, refetch } = useQuery(
+  const { data: featuresData, refetch } = useQuery(
     ['features', rfqId],
     async () => {
       const response = await api.get(`/features/rfq/${rfqId}`);
       return response.data;
     }
   );
+
+  // Handle both paginated and non-paginated responses
+  const features = featuresData?.items || featuresData || [];
 
   const createMutation = useMutation(
     (data) => api.post('/features', data),
@@ -102,7 +106,7 @@ function RfqFeatures({ rfqId }) {
       </Box>
 
       <Grid container spacing={3}>
-        {features?.map((feature) => (
+        {Array.isArray(features) && features.map((feature) => (
           <Grid item xs={12} md={6} lg={4} key={feature.id}>
             <Paper sx={{ p: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="flex-start">
@@ -121,18 +125,20 @@ function RfqFeatures({ rfqId }) {
                       </Typography>
                     </Box>
                   )}
-                  <Box display="flex" gap={1} mt={1}>
-                    <Chip
-                      label={`${feature._count.profilePlans} Profiles`}
-                      size="small"
-                      variant="outlined"
-                    />
-                    <Chip
-                      label={`${feature._count.comments} Comments`}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </Box>
+                  {feature._count && (
+                    <Box display="flex" gap={1} mt={1}>
+                      <Chip
+                        label={`${feature._count.profilePlans || 0} Profiles`}
+                        size="small"
+                        variant="outlined"
+                      />
+                      <Chip
+                        label={`${feature._count.comments || 0} Comments`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </Box>
+                  )}
                 </Box>
                 <Box>
                   <IconButton
@@ -144,7 +150,7 @@ function RfqFeatures({ rfqId }) {
                   <IconButton
                     size="small"
                     onClick={() => deleteMutation.mutate(feature.id)}
-                    disabled={feature._count.profilePlans > 0}
+                    disabled={feature._count?.profilePlans > 0}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -155,7 +161,7 @@ function RfqFeatures({ rfqId }) {
         ))}
       </Grid>
 
-      {features?.length === 0 && (
+      {(!features || features.length === 0) && (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography color="textSecondary">
             No features added yet. Click "Add Feature" to get started.
