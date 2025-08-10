@@ -59,12 +59,13 @@ function RfqDecisionPackages({ rfqId }) {
     }
   );
 
-  const { data: scenarios } = useQuery(
-    ['scenarios', rfqId],
-    async () => {
-      const response = await api.get(`/scenarios/rfq/${rfqId}`);
-      return response.data;
-    }
+const { data: scenarios } = useQuery(
+  ['scenarios', rfqId],
+  async () => {
+    const response = await api.get(`/scenarios/rfq/${rfqId}`);
+    // Handle paginated response
+    return response.data.items || response.data;
+  }
   );
 
   const createPackageMutation = useMutation(

@@ -10,7 +10,13 @@ const controller = {
         page: req.query.page ? Number(req.query.page) : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
       });
-      res.json(data);
+      
+      // If no pagination params provided, return just the items array for backwards compatibility
+      if (!req.query.page && !req.query.pageSize) {
+        res.json(data.items);
+      } else {
+        res.json(data);
+      }
     } catch (err) { next(err); }
   },
 

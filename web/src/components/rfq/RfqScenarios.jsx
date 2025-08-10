@@ -48,20 +48,30 @@ function RfqScenarios({ rfqId, hasFinancialAccess }) {
   const [selectedScenarios, setSelectedScenarios] = useState([]);
   const [calculations, setCalculations] = useState({});
 
-  const { data: scenarios, refetch } = useQuery(
-    ['scenarios', rfqId],
-    async () => {
-      const response = await api.get(`/scenarios/rfq/${rfqId}`);
-      return response.data;
-    }
+const { data: scenarios, refetch } = useQuery(
+  ['scenarios', rfqId],
+  async () => {
+    const response = await api.get(`/scenarios/rfq/${rfqId}`);
+    // Extract items array from paginated response
+    return response.data.items || response.data;
+  }
   );
 
-  const { data: useCases } = useQuery(
-    'useCases',
-    async () => {
+const { data: useCases } = useQuery(
+  'useCases',
+  async () => {
+    try {
       const response = await api.get('/rates/use-cases');
       return response.data;
+    } catch (error) {
+      console.warn('Use cases endpoint not available, using defaults');
+      return ['UC1', 'UC2', 'UC3']; // Fallback to default use cases
     }
+  },
+  {
+    retry: false, // Don't retry if it fails
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  }
   );
 
   const createMutation = useMutation(

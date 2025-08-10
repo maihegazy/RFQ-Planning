@@ -28,5 +28,6 @@ router.get('/sell', validateRequest(listSellRateSchema), ctrl.listSell);
 router.post('/sell', validateRequest(createSellRateSchema), ctrl.createSell);
 router.put('/sell/:id', validateRequest(updateSellRateSchema), ctrl.updateSell);
 router.delete('/sell/:id', ctrl.deleteSell);
+router.get('/use-cases', ctrl.getUseCases);
 
 module.exports = router;
