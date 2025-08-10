@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// web/src/contexts/AuthContext.jsx
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext();
@@ -14,31 +15,51 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
+    // Prevent multiple simultaneous auth checks
+    if (initialized) return;
+    
     try {
+      console.log('Checking authentication...');
       const response = await api.get('/auth/me');
+      console.log('Auth successful:', response.data);
       setUser(response.data.user);
     } catch (error) {
+      console.log('Auth check failed (expected if not logged in):', error.response?.status);
+      // 401 is expected when not logged in
       setUser(null);
     } finally {
       setLoading(false);
+      setInitialized(true);
+    }
+  }, [initialized]);
+
+  useEffect(() => {
+    checkAuth();
+  }, []); // Only run once on mount
+
+  const login = async (email, password) => {
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      setUser(response.data.user);
+      return response.data;
+    } catch (error) {
+      throw error;
     }
   };
 
-  const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    setUser(response.data.user);
-    return response.data;
-  };
-
   const logout = async () => {
-    await api.post('/auth/logout');
-    setUser(null);
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      // Redirect to login
+      window.location.href = '/login';
+    }
   };
 
   const acceptInvite = async (token, password) => {

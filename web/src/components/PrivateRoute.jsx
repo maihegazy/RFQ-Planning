@@ -1,28 +1,17 @@
+// web/src/components/PrivateRoute.jsx
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
 function PrivateRoute({ children }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="100vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const { user } = useAuth();
 
   if (!user) {
+    // Redirect to login if not authenticated
     return <Navigate to="/login" replace />;
   }
 
+  // Render children or outlet for nested routes
   return children || <Outlet />;
 }
 
