@@ -37,9 +37,19 @@ const rbac = {
   },
 
   requireFinancialAccess: (req, res, next) => {
-    if (!req.user || !FINANCIAL_ROLES.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Financial access required' });
-    }
+    if (!req.user || !req.user.role) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  // Only management + admin can access financial data
+  const ALLOWED = [
+    'ADMIN',
+    'DELIVERY_MANAGER',
+    'GENERAL_MANAGER',
+    'ENGINEERING_MANAGER',
+  ];
+  if (!ALLOWED.includes(req.user.role)) {
+    return res.status(403).json({ message: 'Forbidden: financial access required' });
+  }
     next();
   },
 
@@ -49,7 +59,25 @@ const rbac = {
     }
     next();
   },
-
+// allow leaders and management (planning roles)
+allowPlanning: (req, res, next) => {
+  if (!req.user || !req.user.role) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  const ALLOWED = [
+    'ADMIN',
+    'DELIVERY_MANAGER',
+    'GENERAL_MANAGER',
+    'ENGINEERING_MANAGER',
+    'PROJECT_LEADER',
+    'TEAM_LEADER',
+    'TECHNICAL_LEADER',
+  ];
+  if (!ALLOWED.includes(req.user.role)) {
+    return res.status(403).json({ message: 'Forbidden: planning access required' });
+  }
+  next();
+},
   requireRfqAccess: async (req, res, next) => {
     try {
       const rfqId = req.params.rfqId || req.params.id;
