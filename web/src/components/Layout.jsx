@@ -83,10 +83,12 @@ const Sidebar = styled(Box)(({ theme, collapsed }) => ({
   },
 }));
 
-const Main = styled(Box)(({ theme, sidebarCollapsed }) => ({
+const Main = styled(Box, {
+  shouldForwardProp: (prop) => prop !== '$sidebarCollapsed',
+})(({ theme, $sidebarCollapsed }) => ({
   flexGrow: 1,
   marginTop: HEADER_HEIGHT,
-  marginLeft: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+  marginLeft: $sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
   minHeight: `calc(100vh - ${HEADER_HEIGHT}px)`,
   backgroundColor: '#FAFAFA',
   transition: 'margin-left 0.2s ease',

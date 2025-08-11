@@ -186,7 +186,7 @@ function RfqExports({ rfqId }) {
                     )}
                   </TextField>
                 )}
-                )}
+               
               </CardContent>
               <CardActions>
                 <Button
