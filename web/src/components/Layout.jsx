@@ -1,6 +1,7 @@
 // web/src/components/Layout.jsx - Perfectly aligned clean layout
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   Box,
   IconButton,
@@ -63,11 +64,13 @@ const Header = styled(Box)(({ theme }) => ({
   },
 }));
 
-const Sidebar = styled(Box)(({ theme, collapsed }) => ({
+ const Sidebar = styled(Box, {
+   shouldForwardProp: (prop) => prop !== 'collapsed',
+ })(({ theme, collapsed }) => ({
   position: 'fixed',
   top: 0,
   left: 0,
-  bottom: 0,
+  bottom: 0,     
   width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
   backgroundColor: '#FFFFFF',
   borderRight: '1px solid #E5E7EB',
@@ -404,7 +407,7 @@ function Layout() {
       </Header>
 
       {/* Main Content */}
-      <Main sidebarCollapsed={sidebarCollapsed}>
+      <Main $sidebarCollapsed={sidebarCollapsed}>
         <Box sx={{ p: 3, maxWidth: 1440, mx: 'auto' }}>
           <Outlet />
         </Box>

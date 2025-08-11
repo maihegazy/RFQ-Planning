@@ -10,6 +10,7 @@ import { SnackbarProvider } from 'notistack';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
+import { Global, css } from '@emotion/react'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -680,91 +681,6 @@ const theme = createTheme({
   },
 });
 
-// Clean global styles
-const GlobalStyles = () => (
-  <style jsx global>{`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      background-color: #FFFFFF;
-      color: #222222;
-      line-height: 1.5;
-    }
-
-    /* Clean focus states */
-    *:focus-visible {
-      outline: 2px solid #00A8A8;
-      outline-offset: 2px;
-    }
-
-    /* Clean links */
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    a:hover {
-      color: #00A8A8;
-    }
-
-    /* Clean selection */
-    ::selection {
-      background: rgba(0, 168, 168, 0.15);
-      color: #222222;
-    }
-
-    /* Remove spinner from number inputs */
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    /* Clean scrollbar */
-    ::-webkit-scrollbar {
-      width: 12px;
-      height: 12px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #F9FAFB;
-      border-radius: 6px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #CBD5E1;
-      border-radius: 6px;
-      border: 3px solid #F9FAFB;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #9CA3AF;
-    }
-
-    /* Smooth transitions */
-    * {
-      transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
-      transition-timing-function: ease;
-      transition-duration: 150ms;
-    }
-
-    /* Disable transitions for reduce motion */
-    @media (prefers-reduced-motion: reduce) {
-      * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-  `}</style>
-);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -779,7 +695,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             >
               <AuthProvider>
                 <CssBaseline />
-                <GlobalStyles />
                 <App />
               </AuthProvider>
             </SnackbarProvider>
