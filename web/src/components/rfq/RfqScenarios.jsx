@@ -430,10 +430,18 @@ const { data: useCases } = useQuery(
                   margin="normal"
                   defaultValue={scenarioDialog.scenario?.useCase || ''}
                 >
-                  <MenuItem value="">None</MenuItem>
-                  {useCases?.map(uc => (
-                    <MenuItem key={uc} value={uc}>{uc}</MenuItem>
-                  ))}
+                <MenuItem value="">None</MenuItem>
+                  {useCases && useCases.length > 0 ? (
+                    useCases.map(uc => (
+                      <MenuItem key={uc} value={uc}>{uc}</MenuItem>
+                    ))
+                  ) : (
+                    <>
+                      <MenuItem value="UC1">UC1</MenuItem>
+                      <MenuItem value="UC2">UC2</MenuItem>
+                      <MenuItem value="UC3">UC3</MenuItem>
+                    </>
+                  )}
                 </TextField>
               </Grid>
 

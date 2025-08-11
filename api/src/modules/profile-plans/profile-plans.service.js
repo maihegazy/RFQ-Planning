@@ -36,7 +36,7 @@ async function listByRfq({ rfqId, featureId, role, level, location, q, page = 1,
     prisma.profilePlan.findMany({
       where,
       orderBy: [{ featureId: 'asc' }, { role: 'asc' }, { level: 'asc' }, { location: 'asc' }],
-      include: { monthlyAllocations: true, profile: true }, // helpful for UI
+      include: { monthlyAllocations: true, feature: true }, // helpful for UI
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

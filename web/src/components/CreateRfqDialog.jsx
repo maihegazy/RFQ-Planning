@@ -36,10 +36,11 @@ function CreateRfqDialog({ open, onClose, onSuccess }) {
     },
   });
 
-  const { data: users } = useQuery('users', async () => {
-    const response = await api.get('/users');
+  const { data: users } = useQuery('users-list', async () => {
+    const response = await api.get('/users/list');
     return response.data;
   });
+  
 
   const createMutation = useMutation(
     (data) => api.post('/rfqs', data),

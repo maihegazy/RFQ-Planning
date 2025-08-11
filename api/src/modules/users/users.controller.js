@@ -13,6 +13,14 @@ const controller = {
     } catch (err) { next(err); }
   },
 
+  async listBasic(req, res, next) {
+    try {
+      // Return a simplified list of users for mentions/assignments
+      const data = await svc.listBasic();
+      res.json(data);
+    } catch (err) { next(err); }
+  },
+
   async update(req, res, next) {
     try { res.json(await svc.update(req.params.id, req.body)); }
     catch (err) { next(err); }

@@ -434,6 +434,7 @@ function RfqRates({ rfqId }) {
                   required
                   defaultValue={costRateDialog.rate?.costCenter || ''}
                 >
+                  <MenuItem value="">Select Cost Center</MenuItem>
                   <MenuItem value="BCC">BCC</MenuItem>
                   <MenuItem value="HCC">HCC</MenuItem>
                   <MenuItem value="MCC">MCC</MenuItem>

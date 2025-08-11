@@ -52,4 +52,10 @@ const diffSchema = z.object({
   }),
 });
 
-module.exports = { createSchema, updateSchema, listByRfqSchema, cloneSchema, diffSchema };
+const compareSchema = z.object({
+  body: z.object({
+    scenarioIds: z.array(z.string().min(1)).min(2),
+  }),
+});
+
+module.exports = { createSchema, updateSchema, listByRfqSchema, cloneSchema, diffSchema, compareSchema };

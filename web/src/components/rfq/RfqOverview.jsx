@@ -136,12 +136,12 @@ function RfqOverview({ rfq, onUpdate }) {
                   onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                 />
               ) : (
-                <>
+                <Box>
                   <Typography variant="subtitle2" color="textSecondary">
                     RFQ Name
                   </Typography>
                   <Typography variant="body1">{rfq.name}</Typography>
-                </>
+                </Box>
               )}
             </Grid>
 
@@ -154,12 +154,12 @@ function RfqOverview({ rfq, onUpdate }) {
                   onChange={(e) => setEditData({ ...editData, customer: e.target.value })}
                 />
               ) : (
-                <>
+                <Box>
                   <Typography variant="subtitle2" color="textSecondary">
                     Customer
                   </Typography>
                   <Typography variant="body1">{rfq.customer}</Typography>
-                </>
+                </Box>
               )}
             </Grid>
 
@@ -180,7 +180,7 @@ function RfqOverview({ rfq, onUpdate }) {
                   <MenuItem value="NOT_AWARDED">Not Awarded</MenuItem>
                 </TextField>
               ) : (
-                <>
+                <Box>
                   <Typography variant="subtitle2" color="textSecondary">
                     Status
                   </Typography>
@@ -192,7 +192,7 @@ function RfqOverview({ rfq, onUpdate }) {
                       'default'
                     }
                   />
-                </>
+                </Box>
               )}
             </Grid>
 
@@ -234,14 +234,14 @@ function RfqOverview({ rfq, onUpdate }) {
                   onChange={(e) => setEditData({ ...editData, description: e.target.value })}
                 />
               ) : (
-                <>
+                <Box>
                   <Typography variant="subtitle2" color="textSecondary">
                     Description
                   </Typography>
                   <Typography variant="body1">
                     {rfq.description || 'No description provided'}
                   </Typography>
-                </>
+                </Box>
               )}
             </Grid>
           </Grid>
@@ -305,7 +305,9 @@ function RfqOverview({ rfq, onUpdate }) {
                   primary={member.user.name}
                   secondary={
                     <Box>
-                      <Typography variant="body2">{member.user.email}</Typography>
+                      <Typography variant="body2" component="div">
+                        {member.user.email}
+                      </Typography>
                       <Box display="flex" gap={0.5} mt={0.5}>
                         <Chip label={member.user.role} size="small" />
                         {member.isOwner && <Chip label="Owner" size="small" color="primary" />}
@@ -353,7 +355,6 @@ function RfqOverview({ rfq, onUpdate }) {
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
             Add a user to this RFQ team. They will be able to view and edit the RFQ.
           </Typography>
-          {/* In a real implementation, you would fetch users list here */}
           <TextField
             fullWidth
             label="User Email"

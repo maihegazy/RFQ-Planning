@@ -1,5 +1,6 @@
 const svc = require('./scenarios.service');
 const prisma = require('../../db/prisma');
+const calcService = require('../calc/calc.service');
 
 const controller = {
   async listByRfq(req, res, next) {
@@ -43,6 +44,40 @@ const controller = {
   async clone(req, res, next) {
     try { res.status(201).json(await svc.clone(req.params.id, req.body.name)); }
     catch (err) { next(err); }
+  },
+
+  async compare(req, res, next) {
+    try {
+      const { scenarioIds } = req.body;
+      if (!scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length < 2) {
+        return res.status(400).json({ error: 'At least 2 scenario IDs required' });
+      }
+
+      const comparisons = await calcService.compareScenarios(scenarioIds);
+      res.json(comparisons);
+    } catch (err) { 
+      next(err); 
+    }
+  },
+
+  async calculate(req, res, next) {
+    try {
+      const scenario = await svc.get(req.params.id);
+      if (!scenario) {
+        return res.status(404).json({ error: 'Scenario not found' });
+      }
+
+      let calculation;
+      if (scenario.type === 'TM') {
+        calculation = await calcService.calculateTM(scenario.rfqId, scenario.id, scenario.useCase);
+      } else {
+        calculation = await calcService.calculateFixed(scenario.rfqId, scenario);
+      }
+      
+      res.json(calculation);
+    } catch (err) { 
+      next(err); 
+    }
   },
 
   // simple diff endpoint: ?a=scenarioIdA&b=scenarioIdB

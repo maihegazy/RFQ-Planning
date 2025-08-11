@@ -33,7 +33,7 @@ api.interceptors.response.use(
     
     console.error(`[API] Error ${response?.status} from ${config?.url}:`, error.message);
     
-    // Handle 401 errors
+    // Handle different error types
     if (response?.status === 401) {
       // Don't redirect for auth endpoints - these are expected to fail sometimes
       const isAuthEndpoint = config?.url?.includes('/auth/');
@@ -42,8 +42,21 @@ api.interceptors.response.use(
       if (!isAuthEndpoint && !isRedirecting && window.location.pathname !== '/login') {
         isRedirecting = true;
         console.log('[API] Unauthorized access, redirecting to login...');
+        
+        // Reset the flag after a delay to allow future redirects if needed
+        setTimeout(() => {
+          isRedirecting = false;
+        }, 1000);
+        
         window.location.href = '/login';
       }
+    } else if (response?.status === 500) {
+      console.error('[API] Server error:', response?.data);
+      // Don't redirect on 500 errors, let the component handle it
+    } else if (response?.status >= 400 && response?.status < 500) {
+      console.warn('[API] Client error:', response?.status, response?.data);
+    } else if (!response) {
+      console.error('[API] Network error or timeout');
     }
     
     return Promise.reject(error);

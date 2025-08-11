@@ -17,11 +17,27 @@ async function list({ role, q, page = 1, pageSize = 50 }) {
       orderBy: [{ role: 'asc' }, { email: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, createdAt: true },
     }),
   ]);
 
   return { total, page, pageSize, items };
+}
+
+async function listBasic() {
+  // Return simplified user list for mentions/assignments
+  const users = await prisma.user.findMany({
+    where: { active: true },
+    select: { 
+      id: true, 
+      email: true, 
+      name: true, 
+      role: true 
+    },
+    orderBy: { name: 'asc' },
+  });
+  
+  return users;
 }
 
 async function update(id, patch) {
@@ -30,7 +46,7 @@ async function update(id, patch) {
     return await prisma.user.update({
       where: { id },
       data: patch,
-      select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, active: true, createdAt: true },
     });
   } catch (err) {
     if (err.code === 'P2025') {
@@ -40,4 +56,4 @@ async function update(id, patch) {
   }
 }
 
-module.exports = { list, update };
+module.exports = { list, listBasic, update };

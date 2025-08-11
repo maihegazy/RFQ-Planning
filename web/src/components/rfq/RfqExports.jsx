@@ -175,12 +175,17 @@ function RfqExports({ rfqId }) {
                     sx={{ mt: 2 }}
                     disabled={!decisionPackages || decisionPackages.length === 0}
                   >
-                    {decisionPackages?.map(pkg => (
-                      <MenuItem key={pkg.id} value={pkg.id}>
-                        {pkg.name} (v{pkg.version})
-                      </MenuItem>
-                    ))}
+                    {decisionPackages && decisionPackages.length > 0 ? (
+                      decisionPackages.map(pkg => (
+                        <MenuItem key={pkg.id} value={pkg.id}>
+                          {pkg.name} (v{pkg.version})
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuItem value="" disabled>No packages available</MenuItem>
+                    )}
                   </TextField>
+                )}
                 )}
               </CardContent>
               <CardActions>

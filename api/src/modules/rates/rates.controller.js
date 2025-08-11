@@ -1,5 +1,5 @@
 const ratesService = require('./rates.service');
-
+const prisma = require('../../db/prisma');
 const ratesController = {
   // COST
   async listCost(req, res, next) {
@@ -70,25 +70,6 @@ const ratesController = {
       res.status(204).end();
     } catch (err) { next(err); }
   },
-  async getUseCases(req, res, next) {
-  try {
-    // Get unique use cases from existing sell rates
-    const sellRates = await prisma.sellRate.findMany({
-      select: { useCase: true },
-      distinct: ['useCase'],
-    });
-    
-    const useCases = sellRates.map(r => r.useCase).filter(Boolean);
-    
-    // Add default use cases if they don't exist
-    const defaultUseCases = ['UC1', 'UC2', 'UC3'];
-    const allUseCases = [...new Set([...defaultUseCases, ...useCases])];
-    
-    res.json(allUseCases);
-  } catch (err) { 
-    next(err); 
-  }
-},
 async getUseCases(req, res, next) {
     try {
       // Get unique use cases from existing sell rates

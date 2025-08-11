@@ -22,6 +22,8 @@ import {
   Tab,
   Chip,
   Grid,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,40 +42,61 @@ function RfqResourcePlan({ rfqId }) {
   const [allocationDialog, setAllocationDialog] = useState({ open: false, profile: null });
   const [importDialog, setImportDialog] = useState(false);
 
-  // Fix: Query features and extract items from paginated response
-  const { data: featuresResponse } = useQuery(['features', rfqId], async () => {
-    const response = await api.get(`/features/rfq/${rfqId}`);
-    return response.data;
-  });
+  // Query features with better error handling
+  const { data: featuresResponse, isLoading: featuresLoading, error: featuresError } = useQuery(
+    ['features', rfqId], 
+    async () => {
+      const response = await api.get(`/features/rfq/${rfqId}`);
+      return response.data;
+    },
+    {
+      retry: 1,
+      onError: (error) => {
+        console.error('Features query error:', error);
+        enqueueSnackbar('Failed to load features', { variant: 'error' });
+      }
+    }
+  );
   
   // Extract the items array, handling both paginated and non-paginated responses
   const features = useMemo(() => {
     if (!featuresResponse) return [];
-    // Check if it's a paginated response
     if (featuresResponse.items && Array.isArray(featuresResponse.items)) {
       return featuresResponse.items;
     }
-    // If it's already an array, use it directly
     if (Array.isArray(featuresResponse)) {
       return featuresResponse;
     }
     return [];
   }, [featuresResponse]);
 
-  // Fix: Query profile plans using the correct endpoint
-  const { data: profilePlansResponse, refetch } = useQuery(['profile-plans', rfqId], async () => {
-    const response = await api.get(`/profile-plans/rfq/${rfqId}`);
-    return response.data;
-  });
+  // Query profile plans with better error handling
+  const { data: profilePlansResponse, refetch, isLoading: profilesLoading, error: profilesError } = useQuery(
+    ['profile-plans', rfqId], 
+    async () => {
+      const response = await api.get(`/profile-plans/rfq/${rfqId}`);
+      return response.data;
+    },
+    {
+      retry: 1,
+      enabled: !!rfqId,
+      onError: (error) => {
+        console.error('Profile plans query error:', error);
+        if (error.response?.status === 500) {
+          enqueueSnackbar('Server error loading resource plans. Please try again later.', { variant: 'error' });
+        } else {
+          enqueueSnackbar('Failed to load resource plans', { variant: 'error' });
+        }
+      }
+    }
+  );
 
   // Extract the items array for profile plans
   const profilePlans = useMemo(() => {
     if (!profilePlansResponse) return [];
-    // Check if it's a paginated response
     if (profilePlansResponse.items && Array.isArray(profilePlansResponse.items)) {
       return profilePlansResponse.items;
     }
-    // If it's already an array, use it directly
     if (Array.isArray(profilePlansResponse)) {
       return profilePlansResponse;
     }
@@ -89,6 +112,7 @@ function RfqResourcePlan({ rfqId }) {
         refetch();
       },
       onError: (error) => {
+        console.error('Create profile error:', error);
         enqueueSnackbar(error.response?.data?.error || 'Failed to create profile plan', { variant: 'error' });
       },
     }
@@ -103,6 +127,7 @@ function RfqResourcePlan({ rfqId }) {
         refetch();
       },
       onError: (error) => {
+        console.error('Update allocations error:', error);
         enqueueSnackbar(error.response?.data?.error || 'Failed to update allocations', { variant: 'error' });
       },
     }
@@ -116,6 +141,7 @@ function RfqResourcePlan({ rfqId }) {
         refetch();
       },
       onError: (error) => {
+        console.error('Delete profile error:', error);
         enqueueSnackbar(error.response?.data?.error || 'Failed to delete profile plan', { variant: 'error' });
       },
     }
@@ -134,6 +160,7 @@ function RfqResourcePlan({ rfqId }) {
       link.click();
       link.remove();
     } catch (error) {
+      console.error('Export error:', error);
       enqueueSnackbar('Failed to export resource plan', { variant: 'error' });
     }
   };
@@ -155,6 +182,7 @@ function RfqResourcePlan({ rfqId }) {
         console.error(response.data.errors);
       }
     } catch (error) {
+      console.error('Import error:', error);
       enqueueSnackbar('Failed to import file', { variant: 'error' });
     }
     
@@ -172,6 +200,32 @@ function RfqResourcePlan({ rfqId }) {
       return acc;
     }, {});
   }, [profilePlans]);
+
+  // Show loading state
+  if (featuresLoading || profilesLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading resource plan...</Typography>
+      </Box>
+    );
+  }
+
+  // Show error state
+  if (featuresError || profilesError) {
+    return (
+      <Box>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {featuresError ? 'Failed to load features. ' : ''}
+          {profilesError ? 'Failed to load resource plans. ' : ''}
+          Please check your connection and try again.
+        </Alert>
+        <Button variant="outlined" onClick={() => window.location.reload()}>
+          Reload Page
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -253,7 +307,7 @@ function RfqResourcePlan({ rfqId }) {
                             );
                             return (
                               <TableCell key={month}>
-                                {allocation ? parseFloat(allocation.fte).toFixed(1) : '-'}
+                                {allocation ? parseFloat(allocation.fte || 0).toFixed(1) : '-'}
                               </TableCell>
                             );
                           })}
@@ -325,7 +379,7 @@ function RfqResourcePlan({ rfqId }) {
               <Typography variant="subtitle2" color="textSecondary">
                 Cost Centers
               </Typography>
-              <Box display="flex" gap={1} mt={1}>
+              <Box display="flex" gap={1} mt={1} flexWrap="wrap">
                 <Chip label={`BCC: ${profilePlans?.filter(p => p.location === 'BCC').length || 0}`} />
                 <Chip label={`HCC: ${profilePlans?.filter(p => p.location === 'HCC').length || 0}`} />
                 <Chip label={`MCC: ${profilePlans?.filter(p => p.location === 'MCC').length || 0}`} />
@@ -360,10 +414,15 @@ function RfqResourcePlan({ rfqId }) {
               label="Feature"
               margin="normal"
               required
+              defaultValue=""
             >
-              {features?.map(f => (
-                <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
-              ))}
+              {features && features.length > 0 ? (
+                features.map(f => (
+                  <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+                ))
+              ) : (
+                <MenuItem value="" disabled>No features available</MenuItem>
+              )}
             </TextField>
             <TextField
               fullWidth
@@ -388,6 +447,7 @@ function RfqResourcePlan({ rfqId }) {
               label="Location/Cost Center"
               margin="normal"
               required
+              defaultValue=""
             >
               <MenuItem value="BCC">BCC</MenuItem>
               <MenuItem value="HCC">HCC</MenuItem>
@@ -404,12 +464,14 @@ function RfqResourcePlan({ rfqId }) {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setProfileDialog({ open: false, profile: null })}>Cancel</Button>
-            <Button type="submit" variant="contained">Create</Button>
+            <Button type="submit" variant="contained" disabled={createProfileMutation.isLoading}>
+              Create
+            </Button>
           </DialogActions>
         </form>
       </Dialog>
 
-      {/* Import Dialog - Rest of the component remains the same */}
+      {/* Import Dialog */}
       <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Import Resource Plan</DialogTitle>
         <DialogContent>
@@ -421,16 +483,20 @@ function RfqResourcePlan({ rfqId }) {
             fullWidth
             sx={{ mt: 2 }}
             onClick={async () => {
-              const response = await api.get('/imports/templates/resource-plan', {
-                responseType: 'blob',
-              });
-              const url = window.URL.createObjectURL(new Blob([response.data]));
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', 'resource-plan-template.xlsx');
-              document.body.appendChild(link);
-              link.click();
-              link.remove();
+              try {
+                const response = await api.get('/imports/templates/resource-plan', {
+                  responseType: 'blob',
+                });
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', 'resource-plan-template.xlsx');
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+              } catch (error) {
+                enqueueSnackbar('Failed to download template', { variant: 'error' });
+              }
             }}
           >
             Download Template
