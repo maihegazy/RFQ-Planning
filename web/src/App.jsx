@@ -1,5 +1,5 @@
 // web/src/App.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { useAuth } from './contexts/AuthContext';
@@ -15,9 +15,11 @@ import RfqDetail from './pages/RfqDetail';
 import Approvals from './pages/Approvals';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import CreateRfqDialog from './components/CreateRfqDialog';
 
 function App() {
   const { user, loading } = useAuth();
+  const [createRfqOpen, setCreateRfqOpen] = useState(false);
 
   // Show loading state
   if (loading) {
@@ -39,27 +41,29 @@ function App() {
   }
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
-      <Route path="/accept-invite" element={<AcceptInvite />} />
-      
-      {/* Protected routes */}
-      <Route element={<PrivateRoute />}>
-        <Route element={<Layout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/rfqs" element={<RfqList />} />
-          <Route path="/rfqs/:id/*" element={<RfqDetail />} />
-          <Route path="/approvals" element={<Approvals />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
+        
+        {/* Protected routes */}
+        <Route element={<PrivateRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/rfqs" element={<RfqList />} />
+            <Route path="/rfqs/:id/*" element={<RfqDetail />} />
+            <Route path="/approvals" element={<Approvals />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Route>
         </Route>
-      </Route>
-      
-      {/* Catch all - redirect to login or dashboard */}
-      <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-    </Routes>
+        
+        {/* Catch all - redirect to login or dashboard */}
+        <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+      </Routes>
+    </>
   );
 }
 

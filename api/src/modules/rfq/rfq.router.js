@@ -34,8 +34,13 @@ const updateRfqSchema = z.object({
   }),
 });
 
-// Routes
+// Routes - IMPORTANT: Put specific routes before parameterized routes
 router.get('/', rfqController.list);
+
+// Add a specific route for "new" - this should return a template or form data
+router.get('/new', rfqController.getNewRfqTemplate); // You'll need to implement this
+
+// Parameterized routes come after specific routes
 router.get('/:id', rbac.requireRfqAccess, rbac.filterFinancialData(), rfqController.getById);
 router.post('/', validateRequest(createRfqSchema), rfqController.create);
 router.put('/:id', rbac.requireRfqAccess, validateRequest(updateRfqSchema), rfqController.update);
