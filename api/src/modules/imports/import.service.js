@@ -2,6 +2,8 @@ const ExcelJS = require('exceljs');
 const { z } = require('zod');
 const prisma = require('../../db/prisma');
 const logger = require('../../config/logger');
+const LOCATION_LIST = ['BCC', 'HCC', 'MCC'];
+const MONTH_HEADERS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 class ImportService {
   /**
@@ -359,71 +361,111 @@ class ImportService {
   /**
    * Generate import templates
    */
-  async generateTemplates() {
-    const workbook = new ExcelJS.Workbook();
+  async generateResourcePlanTemplateByYears(startYear, endYear) {
+    const wb = new ExcelJS.Workbook();
+    for (let y = startYear; y <= endYear; y++) {
+      const ws = wb.addWorksheet(`ProjectPlan-${y}`);
+      this.#setupResourcePlanSheet(ws);
+      this.#seedExample(ws);
+    }
+    return wb.xlsx.writeBuffer();
+  }
 
-    // Resource Plan template
-    const resourceSheet = workbook.addWorksheet('Resource Plan');
-    resourceSheet.columns = [
-      { header: 'Feature', key: 'feature', width: 30 },
-      { header: 'Role', key: 'role', width: 20 },
-      { header: 'Level', key: 'level', width: 15 },
+  // NEW: placeholder when no years are supplied
+  async generateResourcePlanPlaceholderTemplate() {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('ProjectPlan-XXXX'); // clear signal it’s a skeleton
+    this.#setupResourcePlanSheet(ws);
+    this.#seedExample(ws);
+    const info = wb.addWorksheet('Instructions');
+    info.getColumn(1).width = 100;
+    info.addRow(['This is a placeholder template. When you provide Start/End Year, the file will include one sheet per year (e.g., ProjectPlan-2026, ProjectPlan-2027, …).']);
+    return wb.xlsx.writeBuffer();
+  }
+
+  #setupResourcePlanSheet(ws) {
+    ws.columns = [
+      { header: 'Domain',   key: 'domain',   width: 28 },
+      { header: 'Role',     key: 'role',     width: 26 },
+      { header: 'Level',    key: 'level',    width: 14 },
       { header: 'Location', key: 'location', width: 10 },
-      { header: 'Year', key: 'year', width: 10 },
-      { header: 'Month', key: 'month', width: 10 },
-      { header: 'FTE', key: 'fte', width: 10 },
-      { header: 'Notes', key: 'notes', width: 30 },
+      ...MONTH_HEADERS.map(h => ({ header: h, key: h.toLowerCase(), width: 8 })),
+      { header: 'SUM',      key: 'sum',      width: 10 },
     ];
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-    // Add sample data
-    resourceSheet.addRow({
-      feature: 'Core Development',
-      role: 'Developer',
-      level: 'Senior',
-      location: 'HCC',
-      year: 2026,
-      month: 1,
-      fte: 1.0,
-      notes: 'Full-time allocation',
+    // validations (optional)
+    ws.dataValidations.add(`D2:D1000`, {
+      type: 'list',
+      formulae: [`"${LOCATION_LIST.join(',')}"`],
+      allowBlank: true
     });
+    ws.dataValidations.add(`E2:P1000`, {
+      type: 'decimal',
+      operator: 'between',
+      formulae: [0, 1],
+      allowBlank: true
+    });
+  }
 
-    // Cost Rates template
-    const costSheet = workbook.addWorksheet('Cost Rates');
+  #seedExample(ws) {
+    ws.addRow({ domain: 'Diag, DTC, Degradation' }).font = { bold: true };
+    this.#addRoleRow(ws, { role: 'SW Developer', level: 'Senior', location: 'HCC' });
+    this.#addRoleRow(ws, { role: 'SW Test engineer (UT, IT)', level: 'Senior', location: 'MCC' });
+  }
+
+  #addRoleRow(ws, { domain, role, level, location }) {
+    const rowIndex = ws.rowCount + 1;
+    ws.addRow({
+      domain: domain || null, role, level, location,
+      jan: 1, feb: 1, mar: 1, apr: 1, may: 1, jun: 1,
+      jul: 1, aug: 1, sep: 1, oct: 1, nov: 1, dec: 1
+    });
+    ws.getCell(rowIndex, 17).value = { formula: `SUM(E${rowIndex}:P${rowIndex})` }; // SUM col
+  }
+
+  // === RATES template (unchanged from your split) ===
+  async generateRatesTemplate() {
+    const wb = new ExcelJS.Workbook();
+
+    const costSheet = wb.addWorksheet('Cost Rates');
     costSheet.columns = [
-      { header: 'Cost Center', key: 'costCenter', width: 15 },
+      { header: 'Cost Center',    key: 'costCenter',   width: 15 },
       { header: 'Effective From', key: 'effectiveFrom', width: 15 },
-      { header: 'Effective To', key: 'effectiveTo', width: 15 },
-      { header: 'Cost €/h', key: 'costPerHour', width: 15 },
+      { header: 'Effective To',   key: 'effectiveTo',   width: 15 },
+      { header: 'Cost €/h',       key: 'costPerHour',   width: 15 },
     ];
+    costSheet.addRow({ costCenter: 'HCC', effectiveFrom: '2025-01-01', effectiveTo: '2025-12-31', costPerHour: 45 });
+    costSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-    costSheet.addRow({
-      costCenter: 'HCC',
-      effectiveFrom: '2025-01-01',
-      effectiveTo: '2025-12-31',
-      costPerHour: 45,
-    });
-
-    // Sell Rates template
-    const sellSheet = workbook.addWorksheet('Sell Rates');
+    const sellSheet = wb.addWorksheet('Sell Rates');
     sellSheet.columns = [
-      { header: 'Location', key: 'location', width: 15 },
-      { header: 'Level', key: 'level', width: 15 },
-      { header: 'Use Case', key: 'useCase', width: 15 },
+      { header: 'Location',       key: 'location',      width: 15 },
+      { header: 'Level',          key: 'level',         width: 15 },
+      { header: 'Use Case',       key: 'useCase',       width: 15 },
       { header: 'Effective From', key: 'effectiveFrom', width: 15 },
-      { header: 'Effective To', key: 'effectiveTo', width: 15 },
-      { header: 'Sell €/h', key: 'sellPerHour', width: 15 },
+      { header: 'Effective To',   key: 'effectiveTo',   width: 15 },
+      { header: 'Sell €/h',       key: 'sellPerHour',   width: 15 },
     ];
+    sellSheet.addRow({ location: 'HCC', level: 'Senior', useCase: 'UC1', effectiveFrom: '2025-01-01', effectiveTo: '2025-12-31', sellPerHour: 70 });
+    sellSheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-    sellSheet.addRow({
-      location: 'HCC',
-      level: 'Senior',
-      useCase: 'UC1',
-      effectiveFrom: '2025-01-01',
-      effectiveTo: '2025-12-31',
-      sellPerHour: 70,
-    });
+    return wb.xlsx.writeBuffer();
+  }
 
-    return workbook.xlsx.writeBuffer();
+  // === unified entrypoint for controller ===
+  async generateTemplateByType(type, params = {}) {
+    if (type === 'resource-plan') {
+      const { startYear, endYear } = params;
+      return this.generateResourcePlanTemplateByYears(startYear, endYear, params.options);
+    }
+    if (type === 'rates') return this.generateRatesTemplate();
+
+    const err = new Error('Unsupported template type');
+    err.status = 400;
+    throw err;
   }
 }
 

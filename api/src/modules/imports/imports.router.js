@@ -17,6 +17,6 @@ const upload = multer({
 
 router.post('/resource-plan/:rfqId', rbac.requireRfqAccess, upload.single('file'), importsController.importResourcePlan);
 router.post('/rates', rbac.requireFinancialAccess, upload.single('file'), importsController.importRates);
-router.get('/templates/:type', importsController.downloadTemplate);
+router.get('/templates/:type', authenticate, importsController.downloadTemplate);
 
 module.exports = router;

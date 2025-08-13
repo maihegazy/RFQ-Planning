@@ -39,17 +39,37 @@ const importsController = {
 
   async downloadTemplate(req, res, next) {
     try {
-      const buffer = await importService.generateTemplates();
-      
-      res.set({
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="rfq-import-templates.xlsx"',
-      });
-      
-      res.send(buffer);
-    } catch (error) {
-      next(error);
+    const { type } = req.params;
+    if (type !== 'resource-plan' && type !== 'rates') {
+      return res.status(400).json({ error: 'Bad Request', message: "type must be 'resource-plan' or 'rates'" });
     }
+
+    let { startYear, endYear } = req.query;
+    startYear = startYear ? Number(startYear) : undefined;
+    endYear   = endYear   ? Number(endYear)   : undefined;
+
+    let buffer, filename;
+    if (type === 'resource-plan') {
+      if (Number.isInteger(startYear) && Number.isInteger(endYear)) {
+        buffer = await importService.generateResourcePlanTemplateByYears(startYear, endYear);
+        filename = `resource-plan-${startYear}-${endYear}.xlsx`;
+      } else {
+        buffer = await importService.generateResourcePlanPlaceholderTemplate(); // Option B fallback
+        filename = 'resource-plan-XXXX.xlsx';
+      }
+    } else {
+      buffer = await importService.generateRatesTemplate();
+      filename = 'rates-template.xlsx';
+    }
+
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    next(err);
+  }
   },
 };
 

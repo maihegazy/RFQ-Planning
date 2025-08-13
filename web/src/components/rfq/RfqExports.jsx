@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from 'react-query';
 import Chip from '@mui/material/Chip';
 import {
@@ -25,6 +25,10 @@ import {
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  Dialog, DialogTitle, DialogContent, DialogActions,
+} from '@mui/material';
+import { saveAs } from 'file-saver';
 
 function RfqExports({ rfqId }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -39,6 +43,58 @@ function RfqExports({ rfqId }) {
       return response.data;
     }
   );
+  const { data: rfq } = useQuery(
+    ['rfq-brief', rfqId],
+    async () => (await api.get(`/rfqs/${rfqId}`)).data
+  );
+
+  const [openYearsDlg, setOpenYearsDlg] = useState(false);
+  const [startYear, setStartYear] = useState(''); // keep as string for inputs
+  const [endYear, setEndYear] = useState('');
+  const yearsAreValid = useMemo(() => {
+    const s = Number(startYear);
+    const e = Number(endYear);
+    if (!Number.isInteger(s) || !Number.isInteger(e)) return false;
+    if (s < 2000 || e > 2100) return false;
+    if (s > e) return false;
+    if (e - s > 15) return false; // same guard as backend
+    return true;
+  }, [startYear, endYear]);
+
+  const openResourceYearsDialog = () => {
+    setOpenYearsDlg(true);
+  };
+
+  const downloadResourceTemplateWithYears = async () => {
+    if (!yearsAreValid) {
+      enqueueSnackbar('Enter a valid year range (2000–2100, Start ≤ End, span ≤ 16 yrs).', { variant: 'warning' });
+      return;
+    }
+    try {
+      setExporting(p => ({ ...p, ['resource-template']: true }));
+      const s = Number(startYear), e = Number(endYear);
+      const resp = await api.get(`/imports/templates/resource-plan?startYear=${s}&endYear=${e}`, {
+        responseType: 'blob',
+      });
+      saveAs(resp.data, `resource-plan-${s}-${e}.xlsx`);
+    } catch (err) {
+      enqueueSnackbar('Failed to download template. Please try again.', { variant: 'error' });
+    } finally {
+      setExporting(p => ({ ...p, ['resource-template']: false }));
+    }
+  };
+
+  const downloadResourceTemplatePlaceholder = async () => {
+    try {
+      setExporting(p => ({ ...p, ['resource-template']: true }));
+      const resp = await api.get(`/imports/templates/resource-plan`, { responseType: 'blob' });
+      saveAs(resp.data, `resource-plan-XXXX.xlsx`);
+    } catch (err) {
+      enqueueSnackbar('Failed to download placeholder. Please try again.', { variant: 'error' });
+    } finally {
+      setExporting(p => ({ ...p, ['resource-template']: false }));
+    }
+  };
 
   const handleExport = async (type, format) => {
     setExporting({ ...exporting, [type]: true });
@@ -68,10 +124,7 @@ function RfqExports({ rfqId }) {
           break;
 
         case 'resource-template':
-          response = await api.get('/imports/templates/resource-plan', {
-            responseType: 'blob',
-          });
-          filename = 'resource-plan-template.xlsx';
+          await downloadResourceTemplateWithYears();
           break;
 
         case 'rates-template':
@@ -93,7 +146,7 @@ function RfqExports({ rfqId }) {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      
+
       enqueueSnackbar(`Export completed: ${filename}`, { variant: 'success' });
     } catch (error) {
       enqueueSnackbar(`Export failed: ${error.message}`, { variant: 'error' });
@@ -163,7 +216,7 @@ function RfqExports({ rfqId }) {
                 <Typography variant="body2" color="textSecondary">
                   {option.description}
                 </Typography>
-                
+
                 {option.requiresPackage && (
                   <TextField
                     select
@@ -186,7 +239,57 @@ function RfqExports({ rfqId }) {
                     )}
                   </TextField>
                 )}
-               
+                {option.id === 'resource-template' && (
+                  <Box sx={{ mt: 1.5 }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      Generate one sheet per year. Enter Start/End Year or use the placeholder link below.
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                        gap: 1.5,
+                        mb: 0.5,
+                      }}
+                    >
+                      <TextField
+                        label="Start Year"
+                        type="number"
+                        size="small"
+                        value={startYear}
+                        onChange={(e) => setStartYear(e.target.value)}
+                        inputProps={{ min: 2000, max: 2100 }}
+                      />
+                      <TextField
+                        label="End Year"
+                        type="number"
+                        size="small"
+                        value={endYear}
+                        onChange={(e) => setEndYear(e.target.value)}
+                        inputProps={{ min: 2000, max: 2100 }}
+                      />
+                    </Box>
+
+                    {!yearsAreValid && (startYear || endYear) && (
+                      <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
+                        Enter valid years (2000–2100), Start ≤ End, span ≤ 16 years.
+                      </Typography>
+                    )}
+
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={downloadResourceTemplatePlaceholder}
+                      disabled={!!exporting['resource-template']}
+                      sx={{ px: 0, textTransform: 'none', color: 'red' }}
+                    >
+                      Or download placeholder (ProjectPlan-XXXX)
+                    </Button>
+                  </Box>
+                )}
+
+
               </CardContent>
               <CardActions>
                 <Button
@@ -194,8 +297,21 @@ function RfqExports({ rfqId }) {
                   variant="contained"
                   startIcon={exporting[option.id] ? <CircularProgress size={20} /> : <DownloadIcon />}
                   onClick={() => handleExport(option.id, option.format)}
-                  disabled={!option.available || exporting[option.id]}
+                  disabled={!option.available || exporting[option.id] || (option.id === 'resource-template' && !yearsAreValid)}
+                  sx={{
+                    // your preferred enabled look:
+                    bgcolor: 'grey.900',
+                    color: 'common.white',
+                    '&:hover': { bgcolor: 'grey.800' },
+
+                    // make disabled actually look disabled:
+                    '&.Mui-disabled': {
+                      bgcolor: 'action.disabledBackground',
+                      color: 'action.disabled',
+                    },
+                  }}
                 >
+
                   {exporting[option.id] ? 'Exporting...' : 'Export'}
                 </Button>
               </CardActions>
