@@ -59,6 +59,23 @@ function CreateRfqDialog({ open, onClose, onSuccess }) {
   const onSubmit = (data) => {
     createMutation.mutate(data);
   };
+async function getAxiosErrorMessage(err) {
+  try {
+    if (err?.response?.data) {
+      // Sometimes axios wraps JSON in a Blob
+      if (err.response.data instanceof Blob) {
+        const text = await err.response.data.text();
+        try { const json = JSON.parse(text); return json.message || json.error || text; }
+        catch { return text; }
+      }
+      return err.response.data.message || err.response.data.error ||
+             `${err.response.status} ${err.response.statusText || ''}`;
+    }
+    return err?.message || 'Network error';
+  } catch {
+    return 'Unknown error';
+  }
+}
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>

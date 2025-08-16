@@ -9,176 +9,224 @@ class ImportService {
   /**
    * Import resource plan from Excel
    */
-  async importResourcePlan(rfqId, buffer) {
-    const errors = [];
-    const imported = [];
+async importResourcePlan(rfqId, buffer) {
+  const errors = [];
+  const imported = [];
+  const rows = []; // normalized -> {feature, role, level, location, year, month, fte, rowNumber}
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer);
-      const worksheet = workbook.getWorksheet(1);
+  // shared validator (same constraints used by legacy importer)
+  const rowSchema = z.object({
+    feature: z.string().min(1),
+    role: z.string().min(1),
+    level: z.string().min(1),
+    location: z.enum(LOCATION_LIST),
+    year: z.number().min(2025).max(2050),
+    month: z.number().min(1).max(12),
+    fte: z.number().min(0).max(1).multipleOf(0.1),
+    notes: z.string().optional(),
+  });
 
-      // Define expected schema
-      const rowSchema = z.object({
-        feature: z.string().min(1),
-        role: z.string().min(1),
-        level: z.string().min(1),
-        location: z.enum(['BCC', 'HCC', 'MCC']),
-        year: z.number().min(2025).max(2050),
-        month: z.number().min(1).max(12),
-        fte: z.number().min(0).max(1).multipleOf(0.1),
-        notes: z.string().optional(),
-      });
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
 
-      // Skip header row
-      let rowNumber = 2;
-      const featureMap = new Map();
-      const profileMap = new Map();
+    const first = workbook.worksheets[0];
+    if (!first) {
+      return { success: false, imported: 0, errors: [{ row: 0, errors: ['Workbook is empty'] }] };
+    }
 
-      // First pass: collect all data and validate
-      const rows = [];
+    // Detect format: legacy (Year/Month columns) vs new (Jan..Dec columns)
+    const headerVals = [];
+    first.getRow(1).eachCell((cell) => headerVals.push(String(cell.value ?? '').trim()));
+    const hasLegacyColumns = headerVals.some(h => /^year$/i.test(h)) && headerVals.some(h => /^month$/i.test(h));
+    const hasNewMonths = MONTH_HEADERS.every(h => headerVals.includes(h));
+
+    if (hasLegacyColumns && !hasNewMonths) {
+      // ===== Legacy format (existing behavior) =====
+      const worksheet = first;
       worksheet.eachRow((row, rowIndex) => {
-        if (rowIndex === 1) return; // Skip header
-
+        if (rowIndex === 1) return; // header
         try {
           const data = {
             feature: row.getCell(1).value?.toString().trim(),
             role: row.getCell(2).value?.toString().trim(),
             level: row.getCell(3).value?.toString().trim(),
             location: row.getCell(4).value?.toString().trim(),
-            year: parseInt(row.getCell(5).value),
-            month: parseInt(row.getCell(6).value),
-            fte: parseFloat(row.getCell(7).value),
+            year: Number(row.getCell(5).value),
+            month: Number(row.getCell(6).value),
+            fte: Number(row.getCell(7).value),
             notes: row.getCell(8).value?.toString().trim(),
           };
-
           const validated = rowSchema.parse(data);
           rows.push({ ...validated, rowNumber: rowIndex });
-        } catch (error) {
-          errors.push({
-            row: rowIndex,
-            errors: error.errors?.map(e => e.message) || [error.message],
-          });
+        } catch (e) {
+          errors.push({ row: rowIndex, errors: e.errors?.map(er => er.message) || [e.message] });
         }
       });
+    } else {
+      // ===== NEW format: one sheet per year with monthly columns =====
+      for (const ws of workbook.worksheets) {
+        // Year from sheet name
+        const m = (ws.name || '').match(/(\d{4})$/) || (ws.name || '').match(/ProjectPlan[-\s]?(\d{4})/i);
+        if (!m) {
+          errors.push({ sheet: ws.name, row: 1, errors: ['Sheet name must end with a 4-digit year, e.g., ProjectPlan-2027'] });
+          continue;
+        }
+        const year = Number(m[1]);
 
-      // If there are validation errors, return them
-      if (errors.length > 0) {
-        return {
-          success: false,
-          errors,
-          imported: 0,
-        };
+        // Map headers → columns
+        const headerIndex = {};
+        ws.getRow(1).eachCell((cell, colNumber) => {
+          const key = String(cell.value ?? '').trim();
+          if (key) headerIndex[key] = colNumber;
+        });
+
+        const domainCol   = headerIndex['Domain']   ?? 1;
+        const roleCol     = headerIndex['Role']     ?? 2;
+        const levelCol    = headerIndex['Level']    ?? 3;
+        const locationCol = headerIndex['Location'] ?? 4;
+
+        const monthCols = MONTH_HEADERS.map((mName, idx) => {
+          const col = headerIndex[mName];
+          return { name: mName, month: idx + 1, col };
+        });
+
+        if (monthCols.some(c => !c.col)) {
+          errors.push({ sheet: ws.name, row: 1, errors: ['Missing month columns (Jan..Dec).'] });
+          continue;
+        }
+
+        let currentFeature = null; // carries the last "Domain" section header
+
+        ws.eachRow((row, rowIndex) => {
+          if (rowIndex === 1) return;
+
+          const domainVal   = (row.getCell(domainCol).value   ?? '').toString().trim();
+          const roleVal     = (row.getCell(roleCol).value     ?? '').toString().trim();
+          const levelVal    = (row.getCell(levelCol).value    ?? '').toString().trim();
+          const locationVal = (row.getCell(locationCol).value ?? '').toString().trim();
+
+          const monthsEmpty = monthCols.every(c => {
+            const v = row.getCell(c.col).value;
+            return v === null || v === undefined || v === '';
+          });
+
+          // Section header row → sets "Domain"
+          const isDomainHeader = domainVal && !roleVal && !levelVal && !locationVal && monthsEmpty;
+          if (isDomainHeader) {
+            currentFeature = domainVal;
+            return;
+          }
+
+          // Skip fully empty rows
+          if (!domainVal && !roleVal && !levelVal && !locationVal && monthsEmpty) return;
+
+          const featureName = domainVal || currentFeature;
+          if (!featureName) {
+            errors.push({ sheet: ws.name, row: rowIndex, errors: ['Missing Domain: add a section row above with the domain name in column A.'] });
+            return;
+          }
+          if (!roleVal)  { errors.push({ sheet: ws.name, row: rowIndex, errors: ['Role is required'] });  return; }
+          if (!levelVal) { errors.push({ sheet: ws.name, row: rowIndex, errors: ['Level is required'] }); return; }
+          if (!LOCATION_LIST.includes(locationVal)) {
+            errors.push({ sheet: ws.name, row: rowIndex, errors: [`Invalid Location '${locationVal}'. Allowed: ${LOCATION_LIST.join(', ')}`] });
+            return;
+          }
+
+          // Normalize: produce one row per (year, month) for non-blank month cells
+          monthCols.forEach(({ name, month, col }) => {
+            const raw = row.getCell(col).value;
+            if (raw === null || raw === undefined || raw === '') return; // blanks → skip (keeps existing DB value)
+
+            const num = Number(raw);
+            if (Number.isNaN(num)) { errors.push({ sheet: ws.name, row: rowIndex, errors: [`${name}: not a number`] }); return; }
+            if (num < 0 || num > 1) { errors.push({ sheet: ws.name, row: rowIndex, errors: [`${name}: FTE must be between 0 and 1`] }); return; }
+
+            const fteRounded = Math.round(num * 10) / 10; // 1 decimal
+
+            try {
+              const normalized = rowSchema.parse({
+                feature: featureName,
+                role: roleVal,
+                level: levelVal,
+                location: locationVal,
+                year,
+                month,
+                fte: fteRounded,
+              });
+              rows.push({ ...normalized, rowNumber: rowIndex });
+            } catch (e) {
+              errors.push({ sheet: ws.name, row: rowIndex, errors: e.errors?.map(er => er.message) || [e.message] });
+            }
+          });
+        });
+      }
+    }
+
+    if (errors.length > 0) {
+      return { success: false, errors, imported: 0 };
+    }
+
+    // ===== Writes (reuse your existing logic) =====
+    const featureMap = new Map();
+    const profileMap = new Map();
+
+    await prisma.$transaction(async (tx) => {
+      // Create/get features
+      for (const row of rows) {
+        if (!featureMap.has(row.feature)) {
+          let feature = await tx.feature.findFirst({ where: { rfqId, name: row.feature } });
+          if (!feature) feature = await tx.feature.create({ data: { rfqId, name: row.feature } });
+          featureMap.set(row.feature, feature.id);
+        }
       }
 
-      // Second pass: import data
-      await prisma.$transaction(async (tx) => {
-        // Create/get features
-        for (const row of rows) {
-          if (!featureMap.has(row.feature)) {
-            let feature = await tx.feature.findFirst({
-              where: {
-                rfqId,
-                name: row.feature,
-              },
-            });
-
-            if (!feature) {
-              feature = await tx.feature.create({
-                data: {
-                  rfqId,
-                  name: row.feature,
-                },
-              });
-            }
-
-            featureMap.set(row.feature, feature.id);
-          }
-        }
-
-        // Create/get profile plans
-        for (const row of rows) {
-          const featureId = featureMap.get(row.feature);
-          const profileKey = `${featureId}-${row.role}-${row.level}-${row.location}`;
-
-          if (!profileMap.has(profileKey)) {
-            let profile = await tx.profilePlan.findFirst({
-              where: {
-                rfqId,
-                featureId,
-                role: row.role,
-                level: row.level,
-                location: row.location,
-              },
-            });
-
-            if (!profile) {
-              profile = await tx.profilePlan.create({
-                data: {
-                  rfqId,
-                  featureId,
-                  role: row.role,
-                  level: row.level,
-                  location: row.location,
-                  notes: row.notes,
-                },
-              });
-            }
-
-            profileMap.set(profileKey, profile.id);
-          }
-        }
-
-        // Create/update monthly allocations
-        for (const row of rows) {
-          const featureId = featureMap.get(row.feature);
-          const profileKey = `${featureId}-${row.role}-${row.level}-${row.location}`;
-          const profilePlanId = profileMap.get(profileKey);
-
-          await tx.monthlyAllocation.upsert({
-            where: {
-              profilePlanId_year_month: {
-                profilePlanId,
-                year: row.year,
-                month: row.month,
-              },
-            },
-            update: {
-              fte: row.fte,
-            },
-            create: {
-              profilePlanId,
-              year: row.year,
-              month: row.month,
-              fte: row.fte,
-            },
+      // Create/get profile plans
+      for (const row of rows) {
+        const featureId = featureMap.get(row.feature);
+        const key = `${featureId}-${row.role}-${row.level}-${row.location}`;
+        if (!profileMap.has(key)) {
+          let profile = await tx.profilePlan.findFirst({
+            where: { rfqId, featureId, role: row.role, level: row.level, location: row.location },
           });
-
-          imported.push({
-            row: row.rowNumber,
-            feature: row.feature,
-            profile: `${row.role}/${row.level}@${row.location}`,
-            allocation: `${row.year}-${row.month}: ${row.fte}`,
-          });
+          if (!profile) {
+            profile = await tx.profilePlan.create({
+              data: { rfqId, featureId, role: row.role, level: row.level, location: row.location },
+            });
+          }
+          profileMap.set(key, profile.id);
         }
-      });
+      }
 
-      logger.info(`Imported ${imported.length} resource allocations for RFQ ${rfqId}`);
+      // Upsert monthly allocations
+      for (const row of rows) {
+        const featureId = featureMap.get(row.feature);
+        const key = `${featureId}-${row.role}-${row.level}-${row.location}`;
+        const profilePlanId = profileMap.get(key);
 
-      return {
-        success: true,
-        imported: imported.length,
-        details: imported,
-      };
-    } catch (error) {
-      logger.error('Resource plan import error:', error);
-      return {
-        success: false,
-        errors: [{ row: 0, errors: [error.message] }],
-        imported: 0,
-      };
-    }
+        await tx.monthlyAllocation.upsert({
+          where: { profilePlanId_year_month: { profilePlanId, year: row.year, month: row.month } },
+          update: { fte: row.fte },
+          create: { profilePlanId, year: row.year, month: row.month, fte: row.fte },
+        });
+
+        imported.push({
+          row: row.rowNumber,
+          sheetYear: row.year,
+          feature: row.feature,
+          profile: `${row.role}/${row.level}@${row.location}`,
+          allocation: `${row.year}-${row.month}: ${row.fte}`,
+        });
+      }
+    });
+
+    logger.info(`Imported ${imported.length} monthly allocations for RFQ ${rfqId}`);
+    return { success: true, imported: imported.length, details: imported };
+  } catch (error) {
+    logger.error('Resource plan import error:', error);
+    return { success: false, errors: [{ row: 0, errors: [error.message] }], imported: 0 };
   }
+}
 
   /**
    * Import rates from Excel
