@@ -24,6 +24,7 @@ import {
   Grid,
   Alert,
   CircularProgress,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,16 +32,18 @@ import {
   Delete as DeleteIcon,
   Upload as UploadIcon,
   Download as DownloadIcon,
+  GetApp as GetAppIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 
-function RfqResourcePlan({ rfqId }) {
+function RfqResourcePlan({ rfqId, rfqData }) {
   const { enqueueSnackbar } = useSnackbar();
   const [activeTab, setActiveTab] = useState(0);
   const [profileDialog, setProfileDialog] = useState({ open: false, profile: null });
   const [allocationDialog, setAllocationDialog] = useState({ open: false, profile: null });
   const [importDialog, setImportDialog] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   // Query features with better error handling
   const { data: featuresResponse, isLoading: featuresLoading, error: featuresError } = useQuery(
@@ -149,19 +152,70 @@ function RfqResourcePlan({ rfqId }) {
 
   const handleExport = async () => {
     try {
+      enqueueSnackbar('Generating export...', { variant: 'info' });
       const response = await api.get(`/exports/yearly-plan/${rfqId}`, {
         responseType: 'blob',
       });
+      
+      // Get filename from response headers or create default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'resource-plan.xlsx';
+      if (contentDisposition) {
+        const matches = /filename="([^"]*)"/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1];
+        }
+      }
+      
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'resource-plan.xlsx');
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      enqueueSnackbar('Export completed successfully', { variant: 'success' });
     } catch (error) {
       console.error('Export error:', error);
       enqueueSnackbar('Failed to export resource plan', { variant: 'error' });
+    }
+  };
+
+  // NEW: Download RFQ-specific template
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const response = await api.get(`/imports/templates/resource-plan?rfqId=${rfqId}`, {
+        responseType: 'blob',
+      });
+      
+      // Get filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'resource-plan-template.xlsx';
+      if (contentDisposition) {
+        const matches = /filename="([^"]*)"/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1];
+        }
+      }
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      enqueueSnackbar('Template downloaded successfully', { variant: 'success' });
+    } catch (error) {
+      console.error('Template download error:', error);
+      enqueueSnackbar('Failed to download template', { variant: 'error' });
+    } finally {
+      setDownloadingTemplate(false);
     }
   };
 
@@ -170,20 +224,22 @@ function RfqResourcePlan({ rfqId }) {
     formData.append('file', file);
 
     try {
+      enqueueSnackbar('Importing file...', { variant: 'info' });
       const response = await api.post(`/imports/resource-plan/${rfqId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       
       if (response.data.success) {
-        enqueueSnackbar(`Imported ${response.data.imported} allocations successfully`, { variant: 'success' });
+        enqueueSnackbar(`Successfully imported ${response.data.imported} allocations`, { variant: 'success' });
         refetch();
       } else {
-        enqueueSnackbar('Import failed. Check the file format.', { variant: 'error' });
-        console.error(response.data.errors);
+        enqueueSnackbar('Import failed. Please check the file format and try again.', { variant: 'error' });
+        console.error('Import errors:', response.data.errors);
       }
     } catch (error) {
       console.error('Import error:', error);
-      enqueueSnackbar('Failed to import file', { variant: 'error' });
+      const errorMessage = error.response?.data?.error || 'Failed to import file. Please check the format and try again.';
+      enqueueSnackbar(errorMessage, { variant: 'error' });
     }
     
     setImportDialog(false);
@@ -200,6 +256,14 @@ function RfqResourcePlan({ rfqId }) {
       return acc;
     }, {});
   }, [profilePlans]);
+
+  // Get RFQ period info for display
+  const rfqPeriodInfo = useMemo(() => {
+    if (!rfqData) return null;
+    const startPeriod = `${rfqData.startYear}-${String(rfqData.startMonth || 1).padStart(2, '0')}`;
+    const endPeriod = `${rfqData.endYear}-${String(rfqData.endMonth || 12).padStart(2, '0')}`;
+    return { startPeriod, endPeriod };
+  }, [rfqData]);
 
   // Show loading state
   if (featuresLoading || profilesLoading) {
@@ -230,8 +294,24 @@ function RfqResourcePlan({ rfqId }) {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5">Resource Plan</Typography>
+        <Box>
+          <Typography variant="h5">Resource Plan</Typography>
+          {rfqPeriodInfo && (
+            <Typography variant="body2" color="textSecondary">
+              Period: {rfqPeriodInfo.startPeriod} to {rfqPeriodInfo.endPeriod}
+            </Typography>
+          )}
+        </Box>
         <Box display="flex" gap={1}>
+          <Button 
+            startIcon={<GetAppIcon />} 
+            onClick={handleDownloadTemplate}
+            disabled={downloadingTemplate}
+            variant="outlined"
+            color="primary"
+          >
+            {downloadingTemplate ? 'Downloading...' : 'Download Template'}
+          </Button>
           <Button startIcon={<UploadIcon />} onClick={() => setImportDialog(true)}>
             Import
           </Button>
@@ -261,9 +341,18 @@ function RfqResourcePlan({ rfqId }) {
         <Box>
           {!features || features.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="textSecondary">
+              <Typography color="textSecondary" gutterBottom>
                 No features added yet. Add features first to create resource plans.
               </Typography>
+              <Button 
+                variant="outlined" 
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                startIcon={<GetAppIcon />}
+                sx={{ mt: 2 }}
+              >
+                {downloadingTemplate ? 'Downloading...' : 'Download Template to Get Started'}
+              </Button>
             </Paper>
           ) : (
             features.map((feature) => (
@@ -476,12 +565,33 @@ function RfqResourcePlan({ rfqId }) {
         <DialogTitle>Import Resource Plan</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="textSecondary" gutterBottom>
-            Upload an Excel file with resource allocations. Download the template for the correct format.
+            Upload an Excel file with resource allocations. Use the RFQ-specific template for the correct format and timeline.
           </Typography>
+          
+          {rfqPeriodInfo && (
+            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+              This RFQ covers {rfqPeriodInfo.startPeriod} to {rfqPeriodInfo.endPeriod}. 
+              The template will include the correct year sheets and month columns for your RFQ period.
+            </Alert>
+          )}
+          
           <Button
             variant="outlined"
             fullWidth
             sx={{ mt: 2 }}
+            onClick={handleDownloadTemplate}
+            disabled={downloadingTemplate}
+            startIcon={<GetAppIcon />}
+          >
+            {downloadingTemplate ? 'Downloading...' : 'Download RFQ Template'}
+          </Button>
+          
+          <Divider sx={{ my: 2 }}>OR</Divider>
+          
+          <Button
+            variant="text"
+            fullWidth
+            sx={{ mb: 2 }}
             onClick={async () => {
               try {
                 const response = await api.get('/imports/templates/resource-plan', {
@@ -490,17 +600,19 @@ function RfqResourcePlan({ rfqId }) {
                 const url = window.URL.createObjectURL(new Blob([response.data]));
                 const link = document.createElement('a');
                 link.href = url;
-                link.setAttribute('download', 'resource-plan-template.xlsx');
+                link.setAttribute('download', 'resource-plan-template-generic.xlsx');
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
+                window.URL.revokeObjectURL(url);
               } catch (error) {
-                enqueueSnackbar('Failed to download template', { variant: 'error' });
+                enqueueSnackbar('Failed to download generic template', { variant: 'error' });
               }
             }}
           >
-            Download Template
+            Download Generic Template
           </Button>
+          
           <input
             type="file"
             accept=".xlsx,.xls"
@@ -520,7 +632,7 @@ function RfqResourcePlan({ rfqId }) {
               sx={{ mt: 2 }}
               startIcon={<UploadIcon />}
             >
-              Select File
+              Select File to Import
             </Button>
           </label>
         </DialogContent>
